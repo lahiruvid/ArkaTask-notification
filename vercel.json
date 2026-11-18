@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run pages:build",
+  "outputDirectory": "out",
+  "installCommand": "npm install"
+}

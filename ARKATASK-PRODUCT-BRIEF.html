@@ -1,0 +1,614 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ArkaTasks — Product Brief</title>
+  <style>
+    @page { size: A4; margin: 16mm 14mm; }
+    body {
+      font-family: "Segoe UI", Calibri, Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.45;
+      color: #1e293b;
+      max-width: 190mm;
+      margin: 0 auto;
+      padding: 8mm 6mm;
+    }
+    h1 { font-size: 18pt; color: #0f766e; border-bottom: 2px solid #0d9488; padding-bottom: 6px; margin-top: 0; }
+    h2 { font-size: 13pt; color: #0f766e; margin-top: 22px; page-break-after: avoid; }
+    h3 { font-size: 11.5pt; color: #115e59; margin-top: 16px; page-break-after: avoid; }
+    p, li { orphans: 3; widows: 3; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 14px; font-size: 9.5pt; page-break-inside: auto; }
+    th, td { border: 1px solid #cbd5e1; padding: 5px 7px; vertical-align: top; text-align: left; }
+    th { background: #f0fdfa; color: #134e4a; font-weight: 600; }
+    tr { page-break-inside: avoid; }
+    code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; }
+    pre { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 6px; font-size: 8.5pt; white-space: pre-wrap; page-break-inside: avoid; }
+    pre code { background: none; padding: 0; }
+    hr { border: none; border-top: 1px solid #cbd5e1; margin: 18px 0; }
+    strong { color: #0f172a; }
+    ul, ol { padding-left: 1.2em; }
+    a { color: #0d9488; }
+  </style>
+</head>
+<body>
+<h1>ArkaTasks — Complete Product Brief for Saleability &amp; Pricing Analysis</h1>
+<p><strong>Document purpose:</strong> Give this file to Google AI (Pro / Advanced) and ask it to estimate market value, pricing models (one-time sale, SaaS subscription, white-label license), and how saleable the product is.</p>
+<p><strong>Product name:</strong> ArkaTasks<br><strong>Current operator / first client:</strong> DClean (Italy)<br><strong>Live deployment:</strong> <a href="https://dclean-arkatasks.pages.dev">https://dclean-arkatasks.pages.dev</a><br><strong>Document date:</strong> 25 July 2026<br><strong>Status:</strong> Production app in active daily use with real client data  </p>
+<hr>
+<h2>Instruction for the AI evaluator</h2>
+<p>You are a senior SaaS / SMB software pricing analyst. Using <strong>only</strong> the information in this document:</p>
+<ol>
+<li>Assess how <strong>saleable</strong> ArkaTasks is (score 1–10) for:<ul>
+<li>One-time custom sale to another Italian cleaning / vacation-rental company</li>
+<li>Multi-tenant SaaS productization</li>
+<li>White-label license to agencies</li>
+</ul>
+</li>
+<li>Recommend <strong>pricing</strong> in EUR for:<ul>
+<li>One-time setup + license for a single company (like DClean)</li>
+<li>Monthly / yearly SaaS per company</li>
+<li>Optional add-ons (WhatsApp API, multi-user roles, custom branding)</li>
+</ul>
+</li>
+<li>List <strong>strengths</strong>, <strong>gaps vs competitors</strong>, and <strong>what to build next</strong> to raise price.</li>
+<li>Separate <strong>current as-built value</strong> from <strong>potential SaaS value after productization</strong>.</li>
+<li>Be realistic: this is a specialized ops tool for a small Italian cleaning SRL, not an enterprise ERP.</li>
+</ol>
+<hr>
+<h2>1. One-sentence pitch</h2>
+<p>ArkaTasks is a browser-based Italian cleaning operations app that plans who cleans which apartment each night, tracks beds/linen/extra costs in EUR, splits cleaner pay fairly, produces owner invoices-style PDF reports, sends WhatsApp day cards to cleaners, and keeps phone + laptop in sync with multi-layer backups — without requiring a native app install.</p>
+<hr>
+<h2>2. Problem &amp; market</h2>
+<h3>Problem</h3>
+<p>Small Italian cleaning companies serving vacation rentals / apartments typically run schedules in Excel, WhatsApp chats, and memory. Pain points:</p>
+<ul>
+<li>Who cleans which apartment tonight / tomorrow?</li>
+<li>How many single vs double beds, pillow covers, extras?</li>
+<li>What to charge the property owner vs what to pay cleaners (often different amounts)?</li>
+<li>How to send clear instructions to cleaners on WhatsApp?</li>
+<li>How to produce a monthly owner report that looks like their familiar Italian spreadsheet (Importo, Imp.Totale, Letto Matrimoniale / Singolo)?</li>
+<li>How to keep the phone and laptop agreeing without losing history when someone unticks a cleaner?</li>
+<li>How not to lose the whole schedule if a phone is wiped or a free cloud DB pauses?</li>
+</ul>
+<h3>Ideal customer</h3>
+<ul>
+<li>Italian (or EU) cleaning / changeover companies for short-term rentals</li>
+<li>5–80 apartments</li>
+<li>2–20 cleaners</li>
+<li>Owner-operator or small office staff (not large enterprise HR)</li>
+<li>Already lives in WhatsApp + PDF + Excel culture</li>
+</ul>
+<h3>Current proof of use</h3>
+<p>Actively used in production by <strong>DClean</strong> with live operational data (properties, owners, employees, jobs, reports).</p>
+<hr>
+<h2>3. Who uses it</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>How they use ArkaTasks</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Company owner / office</strong></td>
+<td>Login → set schedule on Calendar → manage Properties &amp; Employees → export Reports → WhatsApp PDFs to apartment owners</td>
+</tr>
+<tr>
+<td><strong>Cleaners</strong></td>
+<td>Do <strong>not</strong> log into the app. They receive WhatsApp messages listing places, beds, pay share, notes</td>
+</tr>
+<tr>
+<td><strong>Apartment / property owners (clients of the cleaning company)</strong></td>
+<td>Do <strong>not</strong> log in. They receive PDF reports via WhatsApp</td>
+</tr>
+<tr>
+<td><strong>Developer / admin</strong></td>
+<td>Cloudflare Pages deploy, Supabase project, password recovery via <code>app_login</code> table</td>
+</tr>
+</tbody></table>
+<p>Single shared login for the company (username/password). Not multi-user RBAC today.</p>
+<hr>
+<h2>4. Application map (screens)</h2>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>Route</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dashboard</td>
+<td><code>/</code></td>
+<td>Today &amp; tomorrow overview; unassigned places; WhatsApp notify cleaners</td>
+</tr>
+<tr>
+<td>Calendar</td>
+<td><code>/calendar</code></td>
+<td>Main daily ops: tick cleaners per place, day details, default schedule, copy day</td>
+</tr>
+<tr>
+<td>Properties</td>
+<td><code>/properties</code></td>
+<td>Apartments + Owners (WhatsApp numbers)</td>
+</tr>
+<tr>
+<td>Employees</td>
+<td><code>/employees</code></td>
+<td>Cleaners (name, phone, color)</td>
+</tr>
+<tr>
+<td>Reports</td>
+<td><code>/reports</code></td>
+<td>Detail / calendar / employee PDFs; day·week·month; WhatsApp send flow</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td><code>/settings</code></td>
+<td>Password-gated: company info, backups, device folder, cloud sync, keepalive</td>
+</tr>
+<tr>
+<td>Sync (legacy)</td>
+<td><code>/sync</code></td>
+<td>Redirects to Settings</td>
+</tr>
+</tbody></table>
+<p>Works on <strong>phone and laptop</strong> in Chrome / Safari / Edge. Can <strong>Add to Home Screen</strong> (PWA-style). No App Store install required.</p>
+<hr>
+<h2>5. Feature catalog (complete)</h2>
+<h3>5.1 Authentication &amp; access control</h3>
+<ul>
+<li>Shared company username/password (default historically <code>admin</code> / <code>admin</code>; changeable in-app).</li>
+<li>Session remembered per device (<code>localStorage</code>).</li>
+<li><strong>Settings</strong> asks for password <strong>every time</strong> (extra safety).</li>
+<li>Password change syncs to Supabase <code>app_login</code> (plain text by design for client recovery — not bank-grade auth).</li>
+<li>Sign out from sidebar.</li>
+</ul>
+<h3>5.2 Properties (apartments / places)</h3>
+<ul>
+<li>Create / edit / soft-archive / restore places.</li>
+<li>Fields:<ul>
+<li>Owner (from Owners list)</li>
+<li>Place name</li>
+<li>Italian size: <strong>Monolocale, Bilocale, Trilocale, Quadrilocale, Quadrilocale +</strong> (legacy <strong>Doppia</strong> still loads if already saved)</li>
+<li>Single beds / Double beds</li>
+<li>Pillow covers per single bed / per double bed</li>
+<li>Number of extra pillows</li>
+<li><strong>Owner Pay (€)</strong> — what the apartment owner is charged</li>
+<li><strong>Employee Pay (€)</strong> — pool paid to cleaners for that place (can differ from owner pay)</li>
+<li><strong>Extra cost (€)</strong> — flat add-on</li>
+<li><strong>Extra sheet cost (€)</strong> — flat add-on</li>
+<li>Unit rates: Per single bed, Per double bed, Per extra pillow</li>
+</ul>
+</li>
+<li>Live <strong>Italian cost preview</strong> (“Calcolo costi”) while editing.</li>
+<li>Soft-archive rules: history preserved; past/today still visible where needed; future schedule cleaned carefully.</li>
+</ul>
+<h3>5.3 Owners</h3>
+<ul>
+<li>Separate Owners manager (scrollable list).</li>
+<li>Name + WhatsApp number (international format preferred).</li>
+<li>Soft-archive when unused by active properties.</li>
+<li>Powers report filter dropdown (shows <strong>all entered owners</strong>, not only those with jobs).</li>
+<li>Used as WhatsApp recipients for PDF delivery.</li>
+</ul>
+<h3>5.4 Employees (cleaners)</h3>
+<ul>
+<li>Name, WhatsApp/phone, color code (calendar columns).</li>
+<li>Soft-archive / restore.</li>
+<li>Archived cleaners remain on historical jobs for reports.</li>
+<li>Removed from “default schedule” template so Apply default won’t resurrect them.</li>
+</ul>
+<h3>5.5 Calendar / scheduling (core product)</h3>
+<ul>
+<li>Day picker (ops oriented toward <strong>tomorrow</strong>).</li>
+<li>Matrix: rows = places, columns = cleaners → tick to assign one or more cleaners to a place.</li>
+<li>Per-place <strong>Day details</strong>:<ul>
+<li>Override single/double beds for that night</li>
+<li>Pillow covers rates</li>
+<li>Extra pillows</li>
+<li>Owner pay / Employee pay / Extra cost / Extra sheet cost</li>
+<li>Sheet &amp; pillow unit rates for that day</li>
+<li>Notes for cleaners (quick suggestions: keys, towels, early/late checkout, etc.)</li>
+</ul>
+</li>
+<li><strong>Save as default</strong> — stores tonight’s layout (including empty places) as a reusable template.</li>
+<li><strong>Apply default</strong> or <strong>Copy from another date</strong> — fills <strong>today or future only</strong> (never rewrites the past).</li>
+<li><strong>Password lock</strong> for editing schedules older than <strong>3 days</strong> (session unlock).</li>
+<li>Job <strong>snapshots</strong> freeze place name, owner, size, money fields so later property edits don’t rewrite history invoices.</li>
+<li>Soft-clear (untick all) cancels the day but keeps data for revive / history — sync designed so unticks stick across devices (last-write-wins on assignments).</li>
+</ul>
+<h3>5.6 Dashboard</h3>
+<ul>
+<li>Today and Tomorrow panels.</li>
+<li>Shows assigned jobs and places still missing cleaners.</li>
+<li><strong>WhatsApp notify cleaners</strong>: opens chats with a structured day message (places, beds, pay share, team size, notes, company branding). Batch open with delay for popup blockers.</li>
+</ul>
+<h3>5.7 Reports, PDF, WhatsApp to owners</h3>
+<ul>
+<li>Periods: <strong>Day / Week / Month</strong> (week starts Monday).</li>
+<li>Views:<ol>
+<li><strong>Detail</strong> — line items per place/day (Italian headers)</li>
+<li><strong>Calendar</strong> — Excel-like grid with “X” marks per day</li>
+<li><strong>Employee</strong> — pay summaries (day = per place shares; week/month = totals)</li>
+</ol>
+</li>
+<li>Owner filter: company (all) or specific owner (all entered owners listed).</li>
+<li>Only jobs that are not cancelled and have ≥1 cleaner count.</li>
+<li><strong>Owner Imp.Totale</strong> formula:<ul>
+<li><strong>Importo</strong> (base owner charge)</li>
+<li>+ <strong>Cuscini extra</strong> (extra pillows × rate)</li>
+<li>+ <strong>Costo extra</strong></li>
+<li>+ <strong>Costo lenzuola extra</strong></li>
+</ul>
+</li>
+<li>PDF via jsPDF (Italian column names: DATA, APPARTAMENTI, INTERVENTO, IMPORTO, LETTO MATRIMONIALE / SINGOLO, IMP.TOTALE, etc.).</li>
+<li>WhatsApp flow: download PDF → open owner chat(s) + company chat with “attach the PDF” prompt.<br><strong>Limitation:</strong> browser cannot auto-attach the PDF file; user attaches manually (standard web limitation, not WhatsApp Business API).</li>
+</ul>
+<h3>5.8 Money &amp; cost engine</h3>
+<ul>
+<li>Separates <strong>what the owner pays</strong> from <strong>what cleaners earn</strong>.</li>
+<li>Cleaner pay pool split across the team with <strong>cent-exact</strong> shares (no floating-point unfairness).</li>
+<li>Linen calculation:<ul>
+<li><code>(single beds × per-single-bed rate) + (double beds × per-double-bed rate) + (extra pillows × per-extra-pillow rate)</code></li>
+<li>Bed pillow covers are inventory counts, not billed.</li>
+</ul>
+</li>
+<li>Flat money add-ons: Extra cost, Extra sheet cost.</li>
+<li>Day overrides can customize rates/amounts without changing the property master forever.</li>
+<li>Italian UI labels in calculation panels (“Calcolo costi”, “Letti singoli”, “Letti doppi”, “Cuscini extra”, “Costo lenzuola extra”, “Costo extra”, “Totale biancheria + extra”).</li>
+</ul>
+<h3>5.9 Cloud sync (multi-device)</h3>
+<ul>
+<li>Free <strong>Supabase</strong> project stores one live JSON document (<code>app_state</code> / <code>main</code>).</li>
+<li>Each device pastes Project URL + anon key once in Settings.</li>
+<li>Auto pull/push + manual Sync.</li>
+<li>Merge strategy:<ul>
+<li>Union of properties / employees / owners</li>
+<li>Last-write-wins on job ticks/unticks and soft-deletes</li>
+<li>Guards against empty cloud wiping full local data (and DB trigger protection)</li>
+<li><code>sync_generation</code> prevents resurrecting purged test data</li>
+</ul>
+</li>
+<li>History trail: <code>app_state_history</code> (advanced restore, password-locked).</li>
+</ul>
+<h3>5.10 Backup &amp; disaster recovery (defense in depth)</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Browser working copy</td>
+<td><code>localStorage</code> full app state</td>
+</tr>
+<tr>
+<td>Device snapshots</td>
+<td>IndexedDB (~200 snapshots + last_good + daily samples)</td>
+</tr>
+<tr>
+<td>Full cloud backups</td>
+<td>Supabase <code>app_full_backups</code> (~60 newest; daily when app opens)</td>
+</tr>
+<tr>
+<td>Desktop folder</td>
+<td>Linked folder <code>DCleanArkaTasks</code> (Chrome/Edge File System Access API) writes daily JSON</td>
+</tr>
+<tr>
+<td>Phone</td>
+<td>Daily JSON download to Downloads/Files</td>
+</tr>
+<tr>
+<td>Email notice</td>
+<td>Optional FormSubmit to company email (may be summary if payload large)</td>
+</tr>
+<tr>
+<td>Recovery banner</td>
+<td>If device looks empty but <code>last_good</code> exists → one-tap restore</td>
+</tr>
+<tr>
+<td>Manual import/export</td>
+<td>Download / upload JSON</td>
+</tr>
+<tr>
+<td>Advanced restore</td>
+<td>Password-locked local + cloud history restore</td>
+</tr>
+</tbody></table>
+<h3>5.11 Cloud keepalive</h3>
+<ul>
+<li>Free Supabase projects can pause after inactivity (~7 days).</li>
+<li>App pings cloud about every <strong>5 days</strong> when opened to reduce surprise pauses.</li>
+</ul>
+<h3>5.12 Settings / company branding</h3>
+<ul>
+<li>Company name (appears on PDFs / WhatsApp brand line).</li>
+<li>Company WhatsApp number.</li>
+<li>All backup and sync tools live here behind password.</li>
+</ul>
+<h3>5.13 Soft-delete philosophy</h3>
+<p>Nothing important is hard-deleted in normal use. Archive keeps names for past reports and recovery. Designed so a busy office cannot accidentally erase history.</p>
+<hr>
+<h2>6. How it functions (architecture)</h2>
+<pre><code>┌─────────────────────────────┐
+│  Browser (Phone / Laptop)   │
+│  Next.js static SPA (out/)  │
+│  React UI + local store     │
+│  localStorage + IndexedDB   │
+└──────────────┬──────────────┘
+               │ HTTPS (optional sync)
+               ▼
+┌─────────────────────────────┐
+│  Supabase (free tier OK)    │
+│  app_state (live JSON)      │
+│  app_full_backups           │
+│  app_state_history          │
+│  app_login                  │
+└─────────────────────────────┘
+               ▲
+               │ Deploy static files
+┌─────────────────────────────┐
+│  Cloudflare Pages           │
+│  dclean-arkatasks…     │
+└─────────────────────────────┘
+</code></pre>
+<h3>Tech stack</h3>
+<ul>
+<li><strong>Frontend:</strong> Next.js 15 (static export), React 18, TypeScript, Tailwind CSS, Radix UI</li>
+<li><strong>PDF:</strong> jsPDF + autotable</li>
+<li><strong>Dates / money:</strong> date-fns; EUR with <code>it-IT</code> formatting</li>
+<li><strong>Backend:</strong> No custom server. Supabase as JSON document store + auth credential row</li>
+<li><strong>Hosting:</strong> Cloudflare Pages (<code>npm run build</code> → upload <code>out/</code> folder)</li>
+<li><strong>Messaging:</strong> Opens <code>wa.me</code> links (not WhatsApp Business API)</li>
+<li><strong>Email backup helper:</strong> FormSubmit (free)</li>
+</ul>
+<h3>Data model (logical)</h3>
+<p>One <code>AppData</code> document containing:</p>
+<ul>
+<li><code>properties[]</code></li>
+<li><code>employees[]</code></li>
+<li><code>owners[]</code></li>
+<li><code>jobs[]</code> (+ nested <code>job_assignments[]</code>)</li>
+<li><code>default_schedule</code> map</li>
+<li><code>settings</code> (company name, WhatsApp, sync_generation)</li>
+</ul>
+<p>Jobs snapshot operational fields per night so reports remain historically correct.</p>
+<h3>Local-first behavior</h3>
+<ul>
+<li>App is usable for local viewing/editing even if cloud is down (once loaded).</li>
+<li>Sync reconciles devices when online.</li>
+<li>Designed for small teams, not thousands of concurrent users.</li>
+</ul>
+<hr>
+<h2>7. Business rules summary</h2>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Past days</td>
+<td>Protected from Apply default / copy overwrite</td>
+</tr>
+<tr>
+<td>Edits older than 3 days</td>
+<td>Require password</td>
+</tr>
+<tr>
+<td>Owner vs employee money</td>
+<td>Separate fields</td>
+</tr>
+<tr>
+<td>Imp.Totale</td>
+<td>Importo + cuscini extra + costo extra + costo lenzuola extra</td>
+</tr>
+<tr>
+<td>Team pay split</td>
+<td>Cent-exact division of employee pay pool</td>
+</tr>
+<tr>
+<td>Soft archive</td>
+<td>Prefer archive over delete</td>
+</tr>
+<tr>
+<td>Sync conflicts</td>
+<td>Union entities; LWW assignments/status</td>
+</tr>
+<tr>
+<td>Empty overwrite</td>
+<td>Blocked client-side and by DB trigger</td>
+</tr>
+<tr>
+<td>Currency</td>
+<td>EUR</td>
+</tr>
+<tr>
+<td>Locale / language fit</td>
+<td>Italian apartment sizes + Italian report labels</td>
+</tr>
+<tr>
+<td>Week</td>
+<td>Starts Monday</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>8. What is NOT included (honest scope)</h2>
+<p>Do <strong>not</strong> price this as if it already has:</p>
+<ul>
+<li>Multi-tenant SaaS admin console / self-serve signup</li>
+<li>Per-cleaner mobile login / GPS time clock</li>
+<li>Role-based access (admin vs scheduler vs viewer)</li>
+<li>WhatsApp Business API auto-send with PDF attached</li>
+<li>Stripe / invoicing / payment collection</li>
+<li>Inventory stock of linen warehouse</li>
+<li>Native iOS / Android store apps</li>
+<li>Hashed enterprise SSO / SOC2</li>
+<li>CRM for leads / sales pipeline</li>
+<li>Accounting integration (FatturaPA, etc.)</li>
+</ul>
+<p>These are upsell / roadmap items that increase SaaS price if built.</p>
+<hr>
+<h2>9. Competitive positioning (as built)</h2>
+<h3>Similar categories</h3>
+<ul>
+<li>Generic workforce scheduling (When I Work, Deputy) — usually English, shift-clock oriented, not Italian apartment changeover + Imp.Totale</li>
+<li>Property ops / STR tools (Guesty, Hostaway) — heavy, expensive, not focused on a small cleaning SRL’s Excel+WhatsApp workflow</li>
+<li>Spreadsheets + WhatsApp — cheap but error-prone and no sync/backup discipline</li>
+</ul>
+<h3>Differentiation (real, in product today)</h3>
+<ol>
+<li>Italian changeover language baked into sizes, reports, and money labels  </li>
+<li>Owner charge ≠ cleaner pay, with fair team split  </li>
+<li>Night grid + default schedule workflow for vacation-rental cleaning  </li>
+<li>History protection (snapshots, 3-day lock, soft archive)  </li>
+<li>WhatsApp-native cleaner cards + owner PDF handoff  </li>
+<li>Multi-device sync + extreme backup layering on a <strong>low/no infra cost</strong> stack  </li>
+<li>Install-free PWA suitable for non-technical office users</li>
+</ol>
+<hr>
+<h2>10. Operating economics (current)</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Typical cost</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Cloudflare Pages hosting</td>
+<td>Free tier usually enough for one company</td>
+</tr>
+<tr>
+<td>Supabase</td>
+<td>Free tier (with keepalive consideration)</td>
+</tr>
+<tr>
+<td>FormSubmit email</td>
+<td>Free</td>
+</tr>
+<tr>
+<td>WhatsApp</td>
+<td>User’s own WhatsApp (no API fees)</td>
+</tr>
+<tr>
+<td>Developer maintenance</td>
+<td>Manual deploy of <code>out/</code> + occasional support</td>
+</tr>
+</tbody></table>
+<p><strong>Implication:</strong> Gross margin on a license/SaaS fee can be high if sold as software; support time is the real cost.</p>
+<hr>
+<h2>11. Commercial packaging options to evaluate</h2>
+<h3>A) One-time custom delivery (current shape)</h3>
+<p>Sell setup + training + 3–12 months support to another cleaning company.</p>
+<ul>
+<li>Clone deploy (Cloudflare + Supabase)</li>
+<li>Brand company name / WhatsApp</li>
+<li>Optional small customizations (labels, PDF columns)</li>
+</ul>
+<h3>B) White-label license</h3>
+<p>Same codebase, rebranded per company, annual renewal for updates/support.</p>
+<h3>C) Multi-tenant SaaS (future)</h3>
+<ul>
+<li>Self-serve or sales-led onboarding</li>
+<li>Isolated data per company</li>
+<li>Subscription monthly/yearly</li>
+<li>Requires productization work (tenancy, billing, hashed auth, admin)</li>
+</ul>
+<h3>D) Feature add-ons (price levers)</h3>
+<ul>
+<li>WhatsApp Business API automation</li>
+<li>Multi-user roles</li>
+<li>Owner portal (view-only invoices)</li>
+<li>Cleaner check-in app</li>
+<li>Italian e-invoicing export</li>
+<li>Multi-language (IT/EN)</li>
+</ul>
+<hr>
+<h2>12. Suggested questions for pricing AI (copy/paste)</h2>
+<pre><code>Using the ArkaTasks product brief above:
+
+1) Score saleability 1–10 for (a) one-time sale to Italian SMBs, (b) white-label, (c) SaaS.
+2) Propose EUR price ranges for each model, with low / mid / high and assumptions.
+3) What is the as-built value of THIS codebase vs a from-scratch build quote?
+4) What 5 features would most increase willingness-to-pay in Italy’s STR cleaning niche?
+5) Risks that would make buyers hesitate (security, single login, WhatsApp manual attach, free-tier deps).
+6) Give a 90-day productization plan to justify a €49–€149/month SaaS price.
+7) Compare roughly to hiring a freelancer to rebuild (hours × rate) vs buying this.
+</code></pre>
+<hr>
+<h2>13. Evidence of completeness (implementation depth)</h2>
+<p>The product is not a mockup. Implemented areas include:</p>
+<ul>
+<li>Full CRUD for properties, owners, employees  </li>
+<li>Production calendar with defaults, copy-day, password-gated history edits  </li>
+<li>Cost engine with Italian preview  </li>
+<li>Three PDF report modes + WhatsApp orchestration  </li>
+<li>Cloud sync with merge/LWW and anti-wipe guards  </li>
+<li>IndexedDB backups, full cloud backups, desktop folder backups, recovery banner  </li>
+<li>Client handoff documentation (<code>CLIENT-ACCESS-GUIDE.md</code>)  </li>
+<li>Live Cloudflare Pages deployment used by a real Italian SRL</li>
+</ul>
+<hr>
+<h2>14. Quick facts box</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Product</td>
+<td>ArkaTasks</td>
+</tr>
+<tr>
+<td>Vertical</td>
+<td>Italian apartment / STR cleaning operations</td>
+</tr>
+<tr>
+<td>Delivery</td>
+<td>Web app (static PWA)</td>
+</tr>
+<tr>
+<td>Offline-capable</td>
+<td>Yes for local data after load</td>
+</tr>
+<tr>
+<td>Multi-device</td>
+<td>Yes via Supabase JSON sync</td>
+</tr>
+<tr>
+<td>Messaging</td>
+<td>WhatsApp deep links</td>
+</tr>
+<tr>
+<td>Billing in-app</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Multi-tenant</td>
+<td>No (single-company deploy today)</td>
+</tr>
+<tr>
+<td>Primary language fit</td>
+<td>Italian ops terms + EUR</td>
+</tr>
+<tr>
+<td>Current customer</td>
+<td>DClean</td>
+</tr>
+<tr>
+<td>Live URL</td>
+<td><a href="https://dclean-arkatasks.pages.dev">https://dclean-arkatasks.pages.dev</a></td>
+</tr>
+</tbody></table>
+<hr>
+<p><em>End of product brief. This document describes the application as implemented for saleability and pricing analysis.</em></p>
+
+</body>
+</html>

@@ -1,0 +1,102 @@
+# MASTER PROJECT BLUEPRINT: B&B Cleaning Management ("CleanSync")
+
+> **SYSTEM INSTRUCTION TO CURSOR (AI):** 
+> You are an expert Senior Full Stack Engineer specialized in Next.js and Cloudflare. 
+> This document is the Single Source of Truth. 
+> **Goal:** Build a production-ready, attractive, and bug-free application for a non-technical founder.
+> **Constraint:** The user will deploy this to Cloudflare Pages. You MUST use the Edge Runtime.
+
+---
+
+## 1. THE VISION & DESIGN SYSTEM
+
+### App Overview
+A "set and forget" management tool for a B&B Cleaning Business.
+- **Users:** Admin (Owner) and Employees (Cleaners - View Only).
+- **Core Value:** Assign cleaners to houses -> Calculate weekly salaries -> Generate Invoice PDFs.
+
+### Visual Identity ("Attractive & Simple")
+- **Theme:** "Professional Coastal" 
+  - Primary Color: `Teal-600` (Ocean)
+  - Background: `Slate-50` (Clean/Sand)
+  - Surface: White with soft shadows (`shadow-sm`).
+- **Layout Architecture:**
+  - **Desktop:** Fixed left sidebar navigation (Dashboard, Calendar, Properties, Reports).
+  - **Mobile:** Top navbar with a "Hamburger" drawer menu.
+- **UI Components (Shadcn/UI):**
+  - **Cards:** Use for "Quick Stats" (e.g., "Revenue This Week").
+  - **Tables:** Must use "Zebra striping" and have rounded corners.
+  - **Badges:** Use for status (Green = "Done", Yellow = "Pending").
+
+---
+
+## 2. TECH STACK & HOSTING (STRICT)
+
+- **Framework:** Next.js 14+ (App Router, TypeScript).
+- **Runtime:** `edge` (CRITICAL for Cloudflare).
+- **Database:** Supabase (PostgreSQL).
+- **Styling:** Tailwind CSS + `lucide-react` (Icons).
+- **PDF Generation:** `jspdf` + `jspdf-autotable`.
+- **Deployment Target:** Cloudflare Pages.
+
+---
+
+## 3. DATA SCHEMA (SUPABASE)
+
+**Table 1: `clients`** (The B&B Owners)
+- `id` (uuid, PK), `name` (text), `email` (text), `phone` (text).
+
+**Table 2: `properties`** (The Houses)
+- `id` (uuid, PK), `client_id` (FK -> clients.id), `name` (text), `size_sqft` (int), `default_rate` (decimal), `address` (text).
+
+**Table 3: `employees`** (The Cleaners)
+- `id` (uuid, PK), `name` (text), `phone` (text), `hourly_rate` (decimal), `color_code` (text - for calendar), `is_active` (bool).
+
+**Table 4: `jobs`** (The Work)
+- `id` (uuid, PK), `property_id` (FK), `date` (date), `status` (enum: 'pending', 'completed').
+- `linen_cost` (decimal, default 0), `product_cost` (decimal, default 0).
+- `charged_amount` (decimal).
+
+**Table 5: `job_assignments`**
+- `id` (uuid, PK), `job_id` (FK), `employee_id` (FK).
+
+---
+
+## 4. FEATURE SPECIFICATIONS
+
+### A. The Dashboard (Home)
+- **Top:** 3 Key Cards -> "Active Jobs Today", "Pending Payments", "This Month's Profit".
+- **Action:** Large "Create New Schedule" button.
+
+### B. The Schedule (Calendar)
+- **View:** Monthly/Weekly calendar grid.
+- **Interaction:** Click a date -> Open "New Job" Modal.
+- **Logic:** Show dots or colored bars representing assigned employees.
+
+### C. Salary & Expense Engine
+- **Calculation:** `(Hours Worked * Hourly Rate)` per employee.
+- **UI:** A simple list view where the Owner can "Edit" the final hours before paying.
+
+### D. Reporting (The "Money" Feature)
+- **Input:** Select Client -> Select Month.
+- **Output:** A Data Table + "Export PDF" button.
+- **PDF Format:**
+  - **Header:** B&B Name & Date.
+  - **Columns:** Date | House | Size | Cost | Expenses | Net Profit | Cleaner.
+  - **Footer:** Grand Total.
+
+---
+
+## 5. CLOUDFLARE CONFIGURATION (MANDATORY)
+
+**Step 1: Install Adapter**
+Run: `npm install --save-dev @cloudflare/next-on-pages`
+
+**Step 2: Update `package.json` Scripts**
+```json
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "pages:build": "npx @cloudflare/next-on-pages",
+  "build:zip": "npm run pages:build && echo 'SUCCESS: Zip the .vercel/output/static folder to upload to Cloudflare!'"
+}

@@ -1,0 +1,714 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ArkaTasks — Promo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --sun: #f59e0b;
+      --flame: #ea580c;
+      --teal: #0f766e;
+      --teal2: #0d9488;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; overflow: hidden;
+      font-family: Outfit, system-ui, sans-serif;
+      background: #050912; color: #fff;
+      cursor: none;
+    }
+    @media (pointer: coarse) { html, body { cursor: auto; } .cursor, .cursor-ring { display: none !important; } }
+
+    .stage {
+      position: relative; width: 100vw; height: 100vh;
+      background:
+        radial-gradient(ellipse 90% 70% at 15% 10%, rgba(245,158,11,.42), transparent 52%),
+        radial-gradient(ellipse 80% 60% at 90% 90%, rgba(13,148,136,.36), transparent 50%),
+        #050912;
+    }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(55px); opacity: .5; pointer-events: none;
+      animation: drift 7s ease-in-out infinite alternate;
+    }
+    .orb.a { width: 45vw; height: 45vw; left: -15%; top: 10%; background: #ea580c; }
+    .orb.b { width: 40vw; height: 40vw; right: -12%; bottom: 0; background: #0d9488; animation-delay: -2s; }
+    @keyframes drift {
+      from { transform: translate(0,0) scale(1) rotate(0deg); }
+      to { transform: translate(8%,-6%) scale(1.15) rotate(8deg); }
+    }
+
+    /* Fake interactive cursor */
+    .cursor {
+      position: fixed; width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; border: 2px solid var(--flame);
+      box-shadow: 0 0 20px rgba(234,88,12,.7);
+      pointer-events: none; z-index: 100;
+      transform: translate(-50%,-50%);
+      transition: width .12s, height .12s, background .12s;
+    }
+    .cursor.clicking { width: 10px; height: 10px; background: var(--sun); }
+    .cursor-ring {
+      position: fixed; width: 34px; height: 34px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.45);
+      pointer-events: none; z-index: 99;
+      transform: translate(-50%,-50%);
+      transition: width .2s, height .2s, opacity .2s;
+    }
+    .cursor-ring.clicking { width: 22px; height: 22px; opacity: .5; }
+
+    .fx-click {
+      position: fixed; width: 10px; height: 10px; border-radius: 50%;
+      border: 2px solid var(--sun); pointer-events: none; z-index: 98;
+      transform: translate(-50%,-50%) scale(0);
+      animation: rip .45s ease-out forwards;
+    }
+    @keyframes rip {
+      to { transform: translate(-50%,-50%) scale(4); opacity: 0; }
+    }
+
+    .spark {
+      position: absolute; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--sun); pointer-events: none; opacity: 0;
+      animation: spark 1.8s ease-in-out infinite;
+    }
+    @keyframes spark {
+      0%,100% { opacity: 0; transform: translateY(0) scale(.5); }
+      40% { opacity: .9; transform: translateY(-28px) scale(1.2); }
+      80% { opacity: 0; transform: translateY(-50px) scale(.3); }
+    }
+
+    .slide {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      padding: 3vh 3.5vw;
+      opacity: 0;
+      transform: translateX(60px) scale(.94) rotate(0.6deg);
+      filter: blur(6px);
+      pointer-events: none;
+      transition:
+        opacity .28s cubic-bezier(.2,.9,.2,1),
+        transform .32s cubic-bezier(.2,.9,.2,1),
+        filter .28s ease;
+    }
+    .slide.on {
+      opacity: 1; transform: none; filter: none; pointer-events: auto;
+    }
+    .slide.exit-left {
+      opacity: 0; transform: translateX(-50px) scale(.96); filter: blur(4px);
+    }
+
+    .slide.on .rise { animation: rise .38s cubic-bezier(.2,.9,.2,1) both; }
+    .slide.on .rise.d1 { animation-delay: .04s; }
+    .slide.on .rise.d2 { animation-delay: .08s; }
+    .slide.on .rise.d3 { animation-delay: .12s; }
+    .slide.on .pop { animation: pop .35s cubic-bezier(.34,1.7,.64,1) both; }
+    .slide.on .tick-anim { animation: tickIn .22s cubic-bezier(.34,1.7,.64,1) both; }
+    .slide.on .tick-anim.t1 { animation-delay: .18s; }
+    .slide.on .tick-anim.t2 { animation-delay: .28s; }
+    .slide.on .tick-anim.t3 { animation-delay: .38s; }
+    .slide.on .tick-anim.t4 { animation-delay: .48s; }
+    .slide.on .send-pulse { animation: pulse .7s ease-in-out .25s infinite; }
+    .slide.on .msg-type { animation: typeIn .45s ease .15s both; }
+    .slide.on .card-in { animation: cardIn .32s cubic-bezier(.2,.9,.2,1) both; }
+    .slide.on .card-in.c1 { animation-delay: .05s; }
+    .slide.on .card-in.c2 { animation-delay: .1s; }
+    .slide.on .card-in.c3 { animation-delay: .15s; }
+    .slide.on .card-in.c4 { animation-delay: .2s; }
+    .slide.on .zoom-ui { animation: ken 2.4s ease-out both; }
+    .slide.on .shake-once { animation: shake .35s ease .55s both; }
+    .slide.on .bounce-row { animation: bounceRow .4s cubic-bezier(.34,1.5,.64,1) both; }
+    .slide.on .bounce-row.b1 { animation-delay: .2s; }
+    .slide.on .bounce-row.b2 { animation-delay: .32s; }
+    .slide.on .bounce-row.b3 { animation-delay: .44s; }
+    .slide.on .flash-money { animation: flashMoney .5s ease .3s both; }
+
+    @keyframes rise { from { opacity:0; transform:translateY(18px) scale(.98); } to { opacity:1; transform:none; } }
+    @keyframes pop { from { opacity:0; transform:scale(.5) rotate(-8deg); } to { opacity:1; transform:scale(1) rotate(0); } }
+    @keyframes tickIn {
+      0% { opacity:0; transform:scale(0); }
+      70% { transform:scale(1.25); }
+      100% { opacity:1; transform:scale(1); }
+    }
+    @keyframes pulse {
+      0%,100% { transform:scale(1); box-shadow:0 0 0 0 rgba(37,211,102,.55); }
+      50% { transform:scale(1.06); box-shadow:0 0 0 16px rgba(37,211,102,0); }
+    }
+    @keyframes typeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+    @keyframes cardIn { from { opacity:0; transform:translateY(20px) rotate(-2deg) scale(.92); } to { opacity:1; transform:none; } }
+    @keyframes ken {
+      from { transform: perspective(1000px) rotateY(-8deg) rotateX(4deg) scale(.92); }
+      to { transform: perspective(1000px) rotateY(-1deg) rotateX(.5deg) scale(1); }
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      25% { transform: translateX(-4px) rotate(-.5deg); }
+      75% { transform: translateX(4px) rotate(.5deg); }
+    }
+    @keyframes bounceRow {
+      from { opacity:0; transform: translateX(40px); }
+      to { opacity:1; transform: none; }
+    }
+    @keyframes flashMoney {
+      0% { color: #0f766e; transform: scale(1); }
+      40% { color: var(--flame); transform: scale(1.12); }
+      100% { color: #0f766e; transform: scale(1); }
+    }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    @keyframes wiggle {
+      0%,100% { transform: rotate(0); }
+      30% { transform: rotate(-3deg) scale(1.03); }
+      60% { transform: rotate(3deg) scale(1.03); }
+    }
+
+    .hint {
+      position:absolute; top:.7rem; right:.9rem; z-index:40;
+      font-size:.65rem; color:rgba(255,255,255,.45);
+      background:rgba(0,0,0,.4); padding:.35rem .65rem; border-radius:999px;
+    }
+    .controls {
+      position:absolute; bottom:1.1rem; left:50%; transform:translateX(-50%);
+      z-index:40; display:flex; gap:.4rem; align-items:center;
+    }
+    .dot-nav {
+      width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25);
+      border:0; cursor:pointer; transition: transform .15s, background .15s;
+    }
+    .dot-nav.on { background: var(--sun); transform: scale(1.35); }
+    .dot-nav:hover { background: rgba(255,255,255,.6); }
+    .progress {
+      position:absolute; left:0; right:0; bottom:0; height:4px;
+      background:rgba(255,255,255,.08); z-index:40;
+    }
+    .progress > i {
+      display:block; height:100%; width:0;
+      background:linear-gradient(90deg,var(--sun),var(--flame),var(--teal2));
+      transition: none;
+    }
+
+    .brand { text-align:center; display:grid; gap:.7rem; justify-items:center; }
+    .logo {
+      width:min(22vw,110px); height:min(22vw,110px); border-radius:30%;
+      background:linear-gradient(135deg,var(--sun),var(--flame));
+      display:grid; place-items:center;
+      box-shadow:0 24px 70px rgba(234,88,12,.55);
+      animation:float 2.2s ease-in-out infinite;
+    }
+    .logo.sm { width:min(16vw,78px); height:min(16vw,78px); }
+    .logo svg { width:58%; height:58%; }
+    h1 { font-size:clamp(2.5rem,8vw,5rem); font-weight:900; letter-spacing:-.045em; line-height:.92; }
+    .serif { font-family:Fraunces,Georgia,serif; font-size:clamp(1rem,2.2vw,1.35rem); color:rgba(255,255,255,.82); max-width:30ch; }
+    .pitch { display:flex; flex-wrap:wrap; gap:.4rem; justify-content:center; }
+    .pitch span {
+      font-size:.68rem; font-weight:800; letter-spacing:.03em; text-transform:uppercase;
+      padding:.35rem .65rem; border-radius:999px;
+      background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.14);
+      animation: wiggle 2s ease-in-out infinite;
+    }
+    .pitch span:nth-child(2) { animation-delay: .3s; }
+    .pitch span:nth-child(3) { animation-delay: .6s; }
+
+    .eyebrow { font-size:.7rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:var(--sun); }
+    .headline { font-size:clamp(1.4rem,3.5vw,2.4rem); font-weight:800; letter-spacing:-.035em; line-height:1.05; margin:.25rem 0 .3rem; }
+    .sub { color:rgba(255,255,255,.65); font-size:clamp(.85rem,1.5vw,1.05rem); max-width:36ch; margin-bottom:.55rem; }
+    .sell {
+      display:inline-flex; font-size:.72rem; font-weight:800; color:#fde68a;
+      background:rgba(245,158,11,.18); border:1px solid rgba(245,158,11,.4);
+      padding:.35rem .7rem; border-radius:999px;
+    }
+
+    .layout { width:min(1080px,100%); display:grid; gap:.7rem; }
+    .layout.wide { grid-template-columns:.85fr 1.4fr; align-items:center; gap:1.4rem; }
+    @media (max-width:860px) {
+      .layout.wide { grid-template-columns:1fr; }
+      .layout.wide .copy { text-align:center; justify-items:center; }
+      .layout.wide .copy .sub { margin-inline:auto; }
+    }
+    .copy { display:grid; align-content:center; }
+
+    .app {
+      background:#f1f5f9; border-radius:14px; overflow:hidden; color:#0f172a;
+      box-shadow:0 0 0 1px rgba(255,255,255,.12), 0 30px 80px rgba(0,0,0,.55);
+    }
+    .app-bar {
+      display:flex; align-items:center; gap:.5rem; padding:.55rem .75rem;
+      background:#fff; border-bottom:1px solid #e2e8f0;
+    }
+    .app-bar .mark {
+      width:24px; height:24px; border-radius:7px;
+      background:linear-gradient(135deg,var(--sun),var(--flame));
+      display:grid; place-items:center;
+    }
+    .app-bar .mark svg { width:14px; height:14px; }
+    .app-bar strong { font-size:.85rem; font-weight:800; }
+    .app-bar span { font-size:.58rem; color:#94a3b8; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+
+    .sched-tools {
+      display:flex; gap:.3rem; flex-wrap:wrap; padding:.55rem .75rem; background:#fff;
+      border-bottom:1px solid #e2e8f0; align-items:center;
+    }
+    .btn { border:0; border-radius:7px; padding:.35rem .6rem; font-weight:700; font-size:.7rem; font-family:inherit; }
+    .btn.teal { background:var(--teal); color:#fff; }
+    .btn.ghost { background:#fff; color:#334155; border:1px solid #cbd5e1; }
+    .btn.hot-tap { animation: pulse .6s ease infinite; }
+    .badge-done { margin-left:auto; background:#d1fae5; color:#065f46; font-size:.65rem; font-weight:800; padding:.25rem .5rem; border-radius:7px; }
+
+    .sched-table { width:100%; border-collapse:collapse; font-size:.65rem; }
+    .sched-table th { background:var(--teal); color:#fff; font-weight:700; padding:.45rem .2rem; text-align:center; }
+    .sched-table th.place { text-align:left; padding-left:.55rem; width:28%; }
+    .sched-table td { padding:.35rem .2rem; text-align:center; border-bottom:1px solid #e2e8f0; background:#fff; }
+    .sched-table tr:nth-child(even) td { background:#f8fafc; }
+    .sched-table td.place { text-align:left; padding-left:.55rem; }
+    .pname { font-weight:800; font-size:.7rem; }
+    .pmeta { color:#64748b; font-size:.58rem; }
+    .note-line { color:#0f766e; font-weight:700; font-size:.55rem; margin-top:.08rem; }
+    .tick {
+      width:22px; height:22px; margin:0 auto; border-radius:6px; border:2px solid #e2e8f0;
+      background:#fff; display:grid; place-items:center; font-weight:900; color:#fff; font-size:.65rem;
+    }
+    .tick.on { border-color:transparent; }
+    .dot { width:6px; height:6px; border-radius:50%; margin:0 auto .1rem; }
+
+    .wa-shell { display:grid; grid-template-columns:1.05fr .95fr; gap:.65rem; }
+    @media (max-width:860px) { .wa-shell { grid-template-columns:1fr; } }
+    .dialog { background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.5); color:#0f172a; }
+    .dialog-h { padding:.7rem .8rem .35rem; }
+    .dialog-h h3 { font-size:.92rem; font-weight:800; }
+    .dialog-h p { font-size:.64rem; color:#64748b; margin-top:.12rem; }
+    .send-all {
+      margin:.4rem .8rem; width:calc(100% - 1.6rem); border:0; border-radius:9px;
+      background:#059669; color:#fff; font-weight:800; font-size:.78rem; padding:.6rem .8rem;
+      font-family:inherit; display:flex; align-items:center; justify-content:center; gap:.35rem;
+    }
+    .cleaner { margin:.4rem .8rem; padding:.5rem; border-radius:9px; border:1px solid #e2e8f0; background:#f8fafc; }
+    .cleaner-top { display:flex; justify-content:space-between; align-items:center; gap:.35rem; }
+    .cleaner-top strong { font-size:.78rem; }
+    .cleaner-top small { display:block; color:#64748b; font-size:.6rem; }
+    .btn-send { background:#059669; color:#fff; border:0; border-radius:6px; padding:.3rem .55rem; font-weight:800; font-size:.65rem; font-family:inherit; }
+    .cleaner ul { margin-top:.3rem; padding-left:.8rem; color:#475569; font-size:.62rem; line-height:1.35; }
+    .cleaner .n { color:#0f766e; font-weight:700; }
+
+    .phone {
+      width:min(250px,100%); margin:0 auto; background:#0b141a; border-radius:24px; padding:8px;
+      box-shadow:0 24px 60px rgba(0,0,0,.55); border:2px solid #1f2c34;
+      animation: float 2.4s ease-in-out infinite;
+    }
+    .phone-notch { width:78px; height:8px; background:#000; border-radius:0 0 8px 8px; margin:0 auto 6px; }
+    .chat-head {
+      background:#1f2c34; color:#fff; border-radius:10px 10px 0 0; padding:.5rem .6rem;
+      display:flex; gap:.45rem; align-items:center;
+    }
+    .avatar {
+      width:28px; height:28px; border-radius:50%;
+      background:linear-gradient(135deg,#0d9488,#134e4a);
+      display:grid; place-items:center; font-weight:800; font-size:.65rem;
+    }
+    .chat-head strong { font-size:.74rem; display:block; }
+    .chat-head small { font-size:.55rem; color:#8696a0; }
+    .chat-body {
+      background:#0b141a; min-height:180px; padding:.55rem; border-radius:0 0 10px 10px;
+    }
+    .bubble {
+      background:#005c4b; color:#e9edef; border-radius:8px 8px 2px 8px;
+      padding:.5rem .55rem; font-size:.58rem; line-height:1.35; white-space:pre-wrap;
+      box-shadow:0 2px 6px rgba(0,0,0,.25);
+    }
+    .bubble time { display:block; text-align:right; color:#99beb5; font-size:.5rem; margin-top:.25rem; }
+
+    .value-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.55rem; width:min(960px,100%); }
+    @media (max-width:720px) { .value-grid { grid-template-columns:repeat(2,1fr); } }
+    .vcard {
+      background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+      border-radius:14px; padding:.85rem .7rem; text-align:center;
+      transition: transform .15s;
+    }
+    .vcard:hover { transform: translateY(-4px) scale(1.03); }
+    .vcard .ico {
+      width:38px; height:38px; margin:0 auto .4rem; border-radius:11px;
+      display:grid; place-items:center; font-size:1.05rem;
+      background:linear-gradient(135deg,rgba(245,158,11,.4),rgba(234,88,12,.25));
+    }
+    .vcard.teal .ico { background:linear-gradient(135deg,rgba(13,148,136,.45),rgba(15,118,110,.25)); }
+    .vcard.wa .ico { background:linear-gradient(135deg,rgba(37,211,102,.4),rgba(5,150,105,.25)); }
+    .vcard.cloud .ico { background:linear-gradient(135deg,rgba(56,189,248,.35),rgba(14,165,233,.2)); }
+    .vcard h3 { font-size:.82rem; font-weight:800; margin-bottom:.2rem; }
+    .vcard p { font-size:.62rem; color:rgba(255,255,255,.62); line-height:1.3; }
+
+    .report-tabs { display:flex; gap:.3rem; padding:.55rem .75rem; background:#fff; border-bottom:1px solid #e2e8f0; }
+    .tab { font-size:.64rem; font-weight:800; padding:.35rem .55rem; border-radius:7px; background:#f1f5f9; color:#475569; }
+    .tab.on { background:var(--teal); color:#fff; }
+    .report-body { padding:.65rem; background:#f8fafc; }
+    .report-meta { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.35rem; margin-bottom:.5rem; }
+    .report-meta strong { font-size:.8rem; font-weight:800; }
+    .report-meta span { font-size:.64rem; color:#64748b; }
+    .pdf-btn {
+      background:var(--flame); color:#fff; border:0; border-radius:7px;
+      padding:.35rem .6rem; font-weight:800; font-size:.64rem; font-family:inherit;
+    }
+    .rpt-table { width:100%; border-collapse:collapse; font-size:.58rem; background:#fff; border-radius:8px; overflow:hidden; }
+    .rpt-table th { background:#0f766e; color:#fff; text-align:left; padding:.35rem .4rem; font-weight:700; }
+    .rpt-table td { padding:.35rem .4rem; border-bottom:1px solid #e2e8f0; }
+    .rpt-table tr:last-child td { border-bottom:0; font-weight:800; background:#ecfdf5; }
+    .money { color:#0f766e; font-weight:800; }
+
+    .cal-grid {
+      display:grid; grid-template-columns:1.2fr repeat(5,.65fr) 1.1fr;
+      gap:2px; font-size:.52rem; background:#cbd5e1; border-radius:7px; overflow:hidden; margin-bottom:.5rem;
+    }
+    .cal-grid > div { background:#fff; padding:.28rem .15rem; text-align:center; min-height:1.55rem; display:grid; place-items:center; }
+    .cal-grid .hd { background:#1e293b; color:#fff; font-weight:800; }
+    .cal-grid .x { color:var(--teal); font-weight:900; font-size:.7rem; }
+    .emp-row {
+      display:grid; grid-template-columns:1.4fr .55fr .7fr .75fr; gap:.3rem;
+      background:#fff; border-radius:7px; padding:.4rem .5rem; font-size:.64rem; align-items:center; margin-bottom:.3rem;
+    }
+    .emp-row .m { color:#0f766e; font-weight:800; }
+
+    .cta-row { display:flex; flex-wrap:wrap; gap:.4rem; justify-content:center; margin-top:.55rem; }
+    .cta-pill {
+      font-size:.72rem; font-weight:800; padding:.45rem .75rem; border-radius:999px;
+      background:linear-gradient(135deg,var(--sun),var(--flame));
+      box-shadow:0 8px 24px rgba(234,88,12,.4);
+      animation: wiggle 1.6s ease-in-out infinite;
+    }
+    .cta-pill:nth-child(2) { animation-delay:.2s; }
+    .cta-pill:nth-child(3) { animation-delay:.4s; }
+    .cta-pill:nth-child(4) { animation-delay:.6s; }
+  </style>
+</head>
+<body>
+  <div class="cursor" id="cursor"></div>
+  <div class="cursor-ring" id="ring"></div>
+
+  <div class="stage" id="stage">
+    <div class="orb a"></div>
+    <div class="orb b"></div>
+    <div class="spark" style="left:18%; top:70%; animation-delay:0s"></div>
+    <div class="spark" style="left:72%; top:30%; animation-delay:.4s; background:#0d9488"></div>
+    <div class="spark" style="left:55%; top:80%; animation-delay:.9s"></div>
+    <div class="spark" style="left:30%; top:25%; animation-delay:1.3s; background:#fbbf24"></div>
+
+    <div class="hint">Space / click = next · faster cuts</div>
+
+    <!-- 0 Hook ~1.6s -->
+    <section class="slide on" data-ms="1800" data-cursor="center">
+      <div class="brand">
+        <div class="logo pop">
+          <svg viewBox="0 0 32 32" fill="none"><g stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"><circle cx="16" cy="16" r="5"/><path d="M16 5.5v2.2M16 24.3v2.2M26.5 16h-2.2M7.7 16H5.5M23.4 8.6l-1.6 1.6M10.2 21.8l-1.6 1.6M23.4 23.4l-1.6-1.6M10.2 10.2L8.6 8.6"/></g></svg>
+        </div>
+        <h1 class="rise d1">ArkaTasks</h1>
+        <p class="serif rise d2">Schedule. WhatsApp. PDFs. Sync.</p>
+        <div class="pitch rise d3">
+          <span>Faster ops</span>
+          <span>Happy cleaners</span>
+          <span>Client-ready bills</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1 Features burst ~1.8s -->
+    <section class="slide" data-ms="2200" data-cursor="cards">
+      <div class="layout" style="justify-items:center;text-align:center">
+        <div class="rise">
+          <p class="eyebrow">All-in-one</p>
+          <h2 class="headline">Four tools. One tap flow.</h2>
+        </div>
+        <div class="value-grid" style="margin-top:.35rem">
+          <div class="vcard card-in c1" data-hit="1"><div class="ico">📅</div><h3>Schedule</h3><p>Assign beds &amp; notes fast</p></div>
+          <div class="vcard wa card-in c2" data-hit="2"><div class="ico">💬</div><h3>WhatsApp</h3><p>Send all with prices</p></div>
+          <div class="vcard teal card-in c3" data-hit="3"><div class="ico">📄</div><h3>Reports</h3><p>Detail · Calendar · Pay</p></div>
+          <div class="vcard cloud card-in c4" data-hit="4"><div class="ico">☁️</div><h3>Cloud</h3><p>Phone ⇄ laptop live</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 Schedule ~2.1s -->
+    <section class="slide" data-ms="3200" data-cursor="ticks">
+      <div class="layout wide">
+        <div class="copy rise">
+          <p class="eyebrow">Schedule</p>
+          <h2 class="headline">Build tomorrow in seconds</h2>
+          <p class="sub">Tick · beds · notes — done.</p>
+          <div class="sell">⚡ No more paper lists</div>
+        </div>
+        <div class="app zoom-ui rise d2">
+          <div class="app-bar">
+            <div class="mark"><svg viewBox="0 0 32 32" fill="none"><g stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none"><circle cx="16" cy="16" r="5"/><path d="M16 5.5v2.2M16 24.3v2.2M26.5 16h-2.2M7.7 16H5.5M23.4 8.6l-1.6 1.6M10.2 21.8l-1.6 1.6M23.4 23.4l-1.6-1.6M10.2 10.2L8.6 8.6"/></g></svg></div>
+            <div><strong>Quick Assign</strong><span>Tomorrow</span></div>
+          </div>
+          <div class="sched-tools">
+            <button class="btn ghost" type="button">Today</button>
+            <button class="btn teal hot-tap" type="button" data-hit="tomorrow">Tomorrow</button>
+            <span class="badge-done">6/6 ✓</span>
+          </div>
+          <table class="sched-table">
+            <thead>
+              <tr>
+                <th class="place">Place</th><th>S</th><th>D</th>
+                <th><div class="dot" style="background:#0d9488"></div>Mar</th>
+                <th><div class="dot" style="background:#7c3aed"></div>Luc</th>
+                <th><div class="dot" style="background:#ea580c"></div>Sof</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="place"><div class="pname">Apt 12</div><div class="note-line">Keys with reception</div></td>
+                <td>2</td><td>1</td>
+                <td><div class="tick on tick-anim t1" style="background:#0d9488" data-hit="t1">✓</div></td>
+                <td><div class="tick on tick-anim t2" style="background:#7c3aed" data-hit="t2">✓</div></td>
+                <td><div class="tick"></div></td>
+              </tr>
+              <tr>
+                <td class="place"><div class="pname">Villa Mare</div><div class="note-line">Extra towels</div></td>
+                <td>0</td><td>3</td>
+                <td><div class="tick"></div></td>
+                <td><div class="tick"></div></td>
+                <td><div class="tick on tick-anim t3" style="background:#ea580c" data-hit="t3">✓</div></td>
+              </tr>
+              <tr>
+                <td class="place"><div class="pname">Suite Centro</div></td>
+                <td>1</td><td>1</td>
+                <td><div class="tick on tick-anim t4" style="background:#0d9488" data-hit="t4">✓</div></td>
+                <td><div class="tick"></div></td>
+                <td><div class="tick"></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 WhatsApp ~2.2s -->
+    <section class="slide" data-ms="3200" data-cursor="send">
+      <div class="layout">
+        <div class="copy rise" style="text-align:center;justify-items:center">
+          <p class="eyebrow">WhatsApp</p>
+          <h2 class="headline">Send all — personal messages</h2>
+          <p class="sub" style="margin-inline:auto">Beds · price · notes. Zero group-chat noise.</p>
+        </div>
+        <div class="wa-shell rise d2">
+          <div class="dialog shake-once">
+            <div class="dialog-h"><h3>WhatsApp notify · Today</h3><p>One tap for the whole team</p></div>
+            <button class="send-all send-pulse" type="button" data-hit="sendall">✦ Send all (4)</button>
+            <div class="cleaner">
+              <div class="cleaner-top">
+                <div><strong>Maria Rossi</strong><small>2 places · €100</small></div>
+                <button class="btn-send" type="button">Send</button>
+              </div>
+              <ul><li>Apt 12 · <span class="n">Keys with reception</span></li></ul>
+            </div>
+          </div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="chat-head"><div class="avatar">MR</div><div><strong>Maria</strong><small>online</small></div></div>
+            <div class="chat-body">
+              <div class="bubble msg-type">Hi Maria —
+1. Apt 12 · 2S/1D · €45
+   Note: Keys with reception
+2. Suite · 1S/1D · €55
+
+DClean<time>10:42 ✓✓</time></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 Reports combined ~2.3s -->
+    <section class="slide" data-ms="3200" data-cursor="pdf">
+      <div class="layout wide">
+        <div class="copy rise">
+          <p class="eyebrow">Reports</p>
+          <h2 class="headline">PDFs that win clients</h2>
+          <p class="sub">Detail bills · calendar X-grid · employee pay split.</p>
+          <div class="sell">🧾 Month-end in minutes</div>
+        </div>
+        <div class="app rise d2 zoom-ui">
+          <div class="app-bar">
+            <div class="mark"><svg viewBox="0 0 32 32" fill="none"><g stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none"><circle cx="16" cy="16" r="5"/><path d="M16 5.5v2.2M16 24.3v2.2M26.5 16h-2.2M7.7 16H5.5M23.4 8.6l-1.6 1.6M10.2 21.8l-1.6 1.6M23.4 23.4l-1.6-1.6M10.2 10.2L8.6 8.6"/></g></svg></div>
+            <div><strong>Reports</strong><span>Rossi · July</span></div>
+          </div>
+          <div class="report-tabs">
+            <span class="tab on">Detail</span>
+            <span class="tab">Calendar</span>
+            <span class="tab">Employees</span>
+          </div>
+          <div class="report-body">
+            <div class="report-meta">
+              <div><strong>Cliente Rossi</strong><span> · 18 interventi</span></div>
+              <button class="pdf-btn" type="button" data-hit="pdf">↓ PDF</button>
+            </div>
+            <table class="rpt-table">
+              <thead><tr><th>DATA</th><th>PLACE</th><th>TEAM</th><th>TOTALE</th></tr></thead>
+              <tbody>
+                <tr class="bounce-row b1"><td>1 Jul</td><td>Apt 12</td><td>Maria, Luca</td><td class="money">€52</td></tr>
+                <tr class="bounce-row b2"><td>3 Jul</td><td>Apt 12</td><td>Maria</td><td class="money">€52</td></tr>
+                <tr class="bounce-row b3"><td>8 Jul</td><td>Apt 14</td><td>Sofia</td><td class="money">€58</td></tr>
+                <tr><td></td><td></td><td>Totale</td><td class="money flash-money">€1.460</td></tr>
+              </tbody>
+            </table>
+            <div class="cal-grid" style="margin-top:.55rem">
+              <div class="hd">Place</div><div class="hd">1</div><div class="hd">3</div><div class="hd">5</div><div class="hd">7</div><div class="hd">9</div><div class="hd">Amt</div>
+              <div>Villa</div><div class="x">X</div><div class="x">X</div><div></div><div class="x">X</div><div class="x">X</div><div class="money">€280</div>
+            </div>
+            <div class="emp-row bounce-row b1"><strong>Maria</strong><span>12 jobs</span><span>18S/9D</span><div class="m">€620</div></div>
+            <div class="emp-row bounce-row b2"><strong>Luca</strong><span>9 jobs</span><span>8S/11D</span><div class="m">€410</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 CTA ~1.7s -->
+    <section class="slide" data-ms="2000" data-cursor="center">
+      <div class="brand">
+        <div class="logo sm pop">
+          <svg viewBox="0 0 32 32" fill="none"><g stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"><circle cx="16" cy="16" r="5"/><path d="M16 5.5v2.2M16 24.3v2.2M26.5 16h-2.2M7.7 16H5.5M23.4 8.6l-1.6 1.6M10.2 21.8l-1.6 1.6M23.4 23.4l-1.6-1.6M10.2 10.2L8.6 8.6"/></g></svg>
+        </div>
+        <h1 class="rise d1" style="font-size:clamp(2.2rem,6.5vw,3.8rem)">Sell the day.<br>Run the team.</h1>
+        <div class="cta-row rise d2">
+          <span class="cta-pill">Schedule</span>
+          <span class="cta-pill">WhatsApp</span>
+          <span class="cta-pill">Reports</span>
+          <span class="cta-pill">Cloud</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="controls" id="dots"></div>
+    <div class="progress"><i id="bar"></i></div>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    const bar = document.getElementById("bar");
+    const cursor = document.getElementById("cursor");
+    const ring = document.getElementById("ring");
+    const dotsWrap = document.getElementById("dots");
+    let i = 0, started = 0, duration = 0, mx = innerWidth/2, my = innerHeight/2;
+    let cx = mx, cy = my, autoCursor = true;
+
+    slides.forEach((_, idx) => {
+      const b = document.createElement("button");
+      b.className = "dot-nav" + (idx === 0 ? " on" : "");
+      b.type = "button";
+      b.setAttribute("aria-label", "Slide " + (idx + 1));
+      b.onclick = (e) => { e.stopPropagation(); show(idx); };
+      dotsWrap.appendChild(b);
+    });
+    const dots = [...dotsWrap.querySelectorAll(".dot-nav")];
+
+    function rip(x, y) {
+      const el = document.createElement("div");
+      el.className = "fx-click";
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 450);
+    }
+
+    function clickAt(el) {
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      mx = x; my = y;
+      cursor.classList.add("clicking");
+      ring.classList.add("clicking");
+      rip(x, y);
+      setTimeout(() => {
+        cursor.classList.remove("clicking");
+        ring.classList.remove("clicking");
+      }, 120);
+    }
+
+    function runCursorScript(mode) {
+      if (!autoCursor) return;
+      const slide = slides[i];
+      if (mode === "ticks") {
+        const hits = ["t1","t2","t3","t4"].map((id) => slide.querySelector(`[data-hit="${id}"]`));
+        hits.forEach((el, n) => setTimeout(() => clickAt(el), 200 + n * 160));
+      } else if (mode === "send") {
+        setTimeout(() => clickAt(slide.querySelector('[data-hit="sendall"]')), 280);
+      } else if (mode === "pdf") {
+        setTimeout(() => clickAt(slide.querySelector('[data-hit="pdf"]')), 350);
+      } else if (mode === "cards") {
+        [1,2,3,4].forEach((n, idx) => {
+          setTimeout(() => clickAt(slide.querySelector(`[data-hit="${n}"]`)), 120 + idx * 140);
+        });
+      } else {
+        mx = innerWidth * 0.5;
+        my = innerHeight * 0.42;
+      }
+    }
+
+    function show(n) {
+      slides.forEach((s, idx) => {
+        s.classList.toggle("on", idx === n);
+        s.classList.remove("exit-left");
+      });
+      dots.forEach((d, idx) => d.classList.toggle("on", idx === n));
+      i = n;
+      duration = Number(slides[i].dataset.ms) || 1600;
+      started = performance.now();
+      bar.style.width = "0%";
+      slides[i].querySelectorAll(".rise,.pop,.tick-anim,.send-pulse,.msg-type,.card-in,.zoom-ui,.shake-once,.bounce-row,.flash-money").forEach((el) => {
+        el.style.animation = "none";
+        void el.offsetWidth;
+        el.style.animation = "";
+      });
+      runCursorScript(slides[i].dataset.cursor || "center");
+    }
+
+    function next() {
+      show((i + 1) % slides.length);
+    }
+
+    function tick(now) {
+      const t = Math.min(1, (now - started) / duration);
+      bar.style.width = (t * 100).toFixed(1) + "%";
+      if (t >= 1) next();
+
+      // smooth cursor follow
+      cx += (mx - cx) * 0.18;
+      cy += (my - cy) * 0.18;
+      cursor.style.left = cx + "px";
+      cursor.style.top = cy + "px";
+      ring.style.left = cx + "px";
+      ring.style.top = cy + "px";
+
+      requestAnimationFrame(tick);
+    }
+
+    window.addEventListener("mousemove", (e) => {
+      autoCursor = false;
+      mx = e.clientX; my = e.clientY;
+    });
+    window.addEventListener("mousedown", (e) => {
+      cursor.classList.add("clicking");
+      ring.classList.add("clicking");
+      rip(e.clientX, e.clientY);
+    });
+    window.addEventListener("mouseup", () => {
+      cursor.classList.remove("clicking");
+      ring.classList.remove("clicking");
+    });
+
+    document.getElementById("stage").addEventListener("click", (e) => {
+      if (e.target.closest(".dot-nav")) return;
+      next();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowRight") { e.preventDefault(); next(); }
+      if (e.code === "ArrowLeft") { e.preventDefault(); show((i - 1 + slides.length) % slides.length); }
+    });
+
+    // resume auto cursor demo after idle
+    setInterval(() => { autoCursor = true; }, 4000);
+
+    show(0);
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
