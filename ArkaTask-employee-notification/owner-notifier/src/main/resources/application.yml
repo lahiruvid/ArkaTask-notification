@@ -1,0 +1,34 @@
+server:
+  port: 8083
+spring:
+  application:
+    name: owner-notifier
+  rabbitmq:
+    host: ${RABBIT_HOST:rabbitmq}
+    port: 5672
+app:
+  login-service-url: ${LOGIN_SERVICE_URL:http://login-service:8081}
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+resilience4j:
+  retry:
+    instances:
+      interService:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.RestClientException

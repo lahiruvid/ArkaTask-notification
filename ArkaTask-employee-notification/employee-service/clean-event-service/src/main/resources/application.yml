@@ -1,0 +1,43 @@
+server:
+  port: 8082
+spring:
+  application:
+    name: clean-event-service
+  datasource:
+    url: ${SUPABASE_DB_URL:jdbc:postgresql://db:5432/arkatasks}
+    username: ${SUPABASE_DB_USER:arkatasks}
+    password: ${SUPABASE_DB_PASSWORD:arkatasks}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+  rabbitmq:
+    host: ${RABBIT_HOST:rabbitmq}
+    port: 5672
+app:
+  timezone: ${APP_TIMEZONE:Europe/Rome}
+  owner-notifier-url: ${OWNER_NOTIFIER_URL:http://owner-notifier:8083}
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/keys/public.pem}
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+resilience4j:
+  retry:
+    instances:
+      interService:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.RestClientException
