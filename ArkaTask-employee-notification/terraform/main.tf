@@ -12,9 +12,14 @@ variable "aws_region" {
   default = "eu-west-3"
 }
 
-variable "ami_id" {
-  type        = string
-  description = "Ubuntu AMI for this region."
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 }
 
 variable "key_name" {
@@ -82,7 +87,7 @@ resource "aws_ecr_repository" "employee" {
 }
 
 resource "aws_instance" "employee" {
-  ami                    = var.ami_id
+  ami                    = data.aws_ami.amazon_linux_2.id
   instance_type          = var.instance_type
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.employee.id]
