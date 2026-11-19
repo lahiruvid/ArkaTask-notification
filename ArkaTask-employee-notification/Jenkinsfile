@@ -6,14 +6,24 @@ pipeline {
     ECR_REPO = 'arkatasks-employee-notification'
   }
   stages {
+    stage('Build frontend') {
+      steps {
+        sh 'bash deploy/build-frontend.sh'
+      }
+    }
     stage('Build and push images') {
       steps {
-        sh 'bash deploy/build-and-push.sh'
+        sh 'SKIP_FRONTEND=1 bash deploy/build-and-push.sh'
       }
     }
     stage('Compose up') {
       steps {
         sh 'bash deploy/compose-up.sh'
+      }
+    }
+    stage('E2E') {
+      steps {
+        sh 'E2E_BASE_URL=http://127.0.0.1:8880 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 e2e/test_stack.py'
       }
     }
   }

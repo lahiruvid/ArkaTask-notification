@@ -35,8 +35,8 @@ resilience4j:
   retry:
     instances:
       interService:
-        max-attempts: 3
-        wait-duration: 200ms
+        max-attempts: 5
+        wait-duration: 100ms
         enable-exponential-backoff: true
         exponential-backoff-multiplier: 2
         retry-exceptions:

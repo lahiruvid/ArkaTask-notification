@@ -31,14 +31,14 @@ resilience4j:
   ratelimiter:
     configs:
       per-phone:
-        # 5 attempts per phone number per 15 minutes. Tune these two values.
-        limit-for-period: 5
-        limit-refresh-period: 15m
+        # 30 attempts per phone number per minute. Enough for an E2E run.
+        limit-for-period: 30
+        limit-refresh-period: 1m
         timeout-duration: 0s
     instances:
       # @RateLimiter on POST /api/login. Wide endpoint backstop, not per phone.
       login:
-        limit-for-period: 60
+        limit-for-period: 300
         limit-refresh-period: 1m
         timeout-duration: 0s
       # Copied onto one limiter per phone number.
