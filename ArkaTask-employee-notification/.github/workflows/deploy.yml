@@ -55,20 +55,24 @@ jobs:
         run: terraform init -input=false
 
       - name: Import existing resources
+        timeout-minutes: 10
         working-directory: ArkaTask-employee-notification/terraform
+        env:
+          TF_INPUT: "0"
+          TF_VAR_key_name: ${{ vars.TF_KEY_NAME }}
         run: |
           set -euo pipefail
-          has() { terraform state list | grep -qx "$1"; }
+          has() { terraform state list -input=false | grep -qx "$1"; }
           if ! has aws_ecr_repository.employee; then
-            terraform import aws_ecr_repository.employee arkatasks-employee-notification
+            terraform import -input=false -var="key_name=${{ vars.TF_KEY_NAME }}" aws_ecr_repository.employee arkatasks-employee-notification
           fi
           SG=$(aws ec2 describe-security-groups --region eu-west-3 --filters Name=group-name,Values=arkatasks-employee-notification --query 'SecurityGroups[0].GroupId' --output text)
           if [ -n "$SG" ] && [ "$SG" != "None" ] && ! has aws_security_group.employee; then
-            terraform import aws_security_group.employee "$SG"
+            terraform import -input=false -var="key_name=${{ vars.TF_KEY_NAME }}" aws_security_group.employee "$SG"
           fi
           IID=$(aws ec2 describe-instances --region eu-west-3 --filters Name=tag:Name,Values=arkatasks-employee-notification Name=instance-state-name,Values=running,pending,stopped --query 'Reservations[0].Instances[0].InstanceId' --output text)
           if [ -n "$IID" ] && [ "$IID" != "None" ] && ! has aws_instance.employee; then
-            terraform import aws_instance.employee "$IID"
+            terraform import -input=false -var="key_name=${{ vars.TF_KEY_NAME }}" aws_instance.employee "$IID"
           fi
 
       - name: Terraform plan
