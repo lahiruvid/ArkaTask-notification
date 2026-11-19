@@ -62,7 +62,7 @@ jobs:
           TF_VAR_key_name: ${{ vars.TF_KEY_NAME }}
         run: |
           set -euo pipefail
-          has() { terraform state list -input=false | grep -qx "$1"; }
+          has() { terraform state list | grep -qx "$1"; }
           if ! has aws_ecr_repository.employee; then
             terraform import -input=false -var="key_name=${{ vars.TF_KEY_NAME }}" aws_ecr_repository.employee arkatasks-employee-notification
           fi
