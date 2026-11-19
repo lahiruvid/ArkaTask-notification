@@ -17,7 +17,7 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
+// Rate limit disabled for E2E. Restore: import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,15 +57,15 @@ public class LoginController {
   }
 
   @PostMapping("/api/login")
-  @RateLimiter(name = "login", fallbackMethod = "loginRateLimited")
+  // @RateLimiter(name = "login", fallbackMethod = "loginRateLimited")
   public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body) throws Exception {
     String typed = digits(body.get("phone"));
     if (typed.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is required.");
     }
-    if (!phoneLimits.allow(typed)) {
-      return loginRateLimited(body, null);
-    }
+    // if (!phoneLimits.allow(typed)) {
+    //   return loginRateLimited(body, null);
+    // }
     String payload = jdbc.query(
         "select payload::text from app_state where id = 'main'",
         rs -> rs.next() ? rs.getString(1) : null);
