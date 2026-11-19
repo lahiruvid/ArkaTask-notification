@@ -50,8 +50,8 @@ jobs:
 
       - name: Terraform plan
         working-directory: ArkaTask-employee-notification/terraform
-        run: terraform plan -var="ami_id=${{ vars.TF_AMI_ID }}" -var="key_name=${{ vars.TF_KEY_NAME }}"
+        run: terraform plan -var="key_name=${{ vars.TF_KEY_NAME }}"
 
       - name: Terraform apply
         working-directory: ArkaTask-employee-notification/terraform
-        run: terraform apply -auto-approve -var="ami_id=${{ vars.TF_AMI_ID }}" -var="key_name=${{ vars.TF_KEY_NAME }}"
+        run: terraform apply -auto-approve -var="key_name=${{ vars.TF_KEY_NAME }}"
