@@ -22,11 +22,16 @@ eureka:
 management:
   endpoints:
     web:
+      base-path: /actuator
       exposure:
-        include: health
+        include: health,metrics,info
   endpoint:
     health:
       show-details: always
+  health:
+    group:
+      readiness:
+        include: db,diskSpace
 resilience4j:
   ratelimiter:
     configs:

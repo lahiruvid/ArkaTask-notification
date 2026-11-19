@@ -23,6 +23,35 @@ ZIPKIN = os.environ.get("E2E_ZIPKIN_URL", "http://127.0.0.1:9411").rstrip("/")
 PHONE = os.environ.get("E2E_PHONE", "+393331112222")
 
 
+def wait_for_login():
+    grace = int(os.environ.get("E2E_GRACE_SECONDS", "15"))
+    timeout = int(os.environ.get("E2E_READY_TIMEOUT", "180"))
+    print("Waiting %s seconds before checking login-service" % grace, flush=True)
+    time.sleep(grace)
+    deadline = time.time() + timeout
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        try:
+            health_status, _, health_body = request("GET", BASE + "/actuator/health", timeout=5)
+        except Exception as exc:
+            health_status, health_body = 0, str(exc).encode()
+        print("login ready attempt %s: /actuator/health HTTP %s" % (attempt, health_status), flush=True)
+        if health_status == 200 and b"UP" in health_body:
+            return
+        try:
+            status, _, _ = request("POST", BASE + "/api/login", {"phone": "0"}, timeout=5)
+        except Exception as exc:
+            print("login ready attempt %s: /api/login %s" % (attempt, exc), flush=True)
+            time.sleep(5)
+            continue
+        print("login ready attempt %s: /api/login HTTP %s" % (attempt, status), flush=True)
+        if status not in (502, 503, 504):
+            return
+        time.sleep(5)
+    raise RuntimeError("login-service did not answer through Nginx within %s seconds" % timeout)
+
+
 def request(method, url, body=None, headers=None, timeout=20):
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, method=method)
@@ -39,6 +68,10 @@ def request(method, url, body=None, headers=None, timeout=20):
 
 
 class StackTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        wait_for_login()
+
     token = None
     employee_id = None
     today = None
