@@ -5,6 +5,12 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket = "arkatasks-tfstate-034115073932"
+    key    = "employee-notification/terraform.tfstate"
+    region = "eu-west-3"
+  }
 }
 
 variable "aws_region" {
@@ -95,5 +101,9 @@ resource "aws_instance" "employee" {
 
   tags = {
     Name = "arkatasks-employee-notification"
+  }
+
+  lifecycle {
+    ignore_changes = [ami]
   }
 }

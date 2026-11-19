@@ -44,9 +44,32 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Prepare Terraform state bucket
+        run: |
+          set -euo pipefail
+          aws s3api head-bucket --bucket arkatasks-tfstate-034115073932 --region eu-west-3 2>/dev/null \
+            || aws s3api create-bucket --bucket arkatasks-tfstate-034115073932 --region eu-west-3 --create-bucket-configuration LocationConstraint=eu-west-3
+
       - name: Terraform init
         working-directory: ArkaTask-employee-notification/terraform
-        run: terraform init
+        run: terraform init -input=false
+
+      - name: Import existing resources
+        working-directory: ArkaTask-employee-notification/terraform
+        run: |
+          set -euo pipefail
+          has() { terraform state list | grep -qx "$1"; }
+          if ! has aws_ecr_repository.employee; then
+            terraform import aws_ecr_repository.employee arkatasks-employee-notification
+          fi
+          SG=$(aws ec2 describe-security-groups --region eu-west-3 --filters Name=group-name,Values=arkatasks-employee-notification --query 'SecurityGroups[0].GroupId' --output text)
+          if [ -n "$SG" ] && [ "$SG" != "None" ] && ! has aws_security_group.employee; then
+            terraform import aws_security_group.employee "$SG"
+          fi
+          IID=$(aws ec2 describe-instances --region eu-west-3 --filters Name=tag:Name,Values=arkatasks-employee-notification Name=instance-state-name,Values=running,pending,stopped --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          if [ -n "$IID" ] && [ "$IID" != "None" ] && ! has aws_instance.employee; then
+            terraform import aws_instance.employee "$IID"
+          fi
 
       - name: Terraform plan
         working-directory: ArkaTask-employee-notification/terraform
@@ -55,3 +78,51 @@ jobs:
       - name: Terraform apply
         working-directory: ArkaTask-employee-notification/terraform
         run: terraform apply -auto-approve -var="key_name=${{ vars.TF_KEY_NAME }}"
+
+  containers:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::034115073932:role/GitHubActionsRole
+          aws-region: eu-west-3
+
+      - name: Build and push images
+        working-directory: ArkaTask-employee-notification
+        env:
+          AWS_REGION: eu-west-3
+          ECR_REGISTRY: 034115073932.dkr.ecr.eu-west-3.amazonaws.com
+          ECR_REPO: arkatasks-employee-notification
+        run: bash deploy/build-and-push.sh
+
+      - name: Run the Jenkins compose stage on EC2
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$EC2_SSH_KEY" > "$HOME/.ssh/ec2.pem"
+          chmod 600 "$HOME/.ssh/ec2.pem"
+          IP=$(aws ec2 describe-instances --region eu-west-3 --filters Name=tag:Name,Values=arkatasks-employee-notification Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          test -n "$IP" && test "$IP" != "None"
+          SSH=(ssh -i "$HOME/.ssh/ec2.pem" -o StrictHostKeyChecking=accept-new "ec2-user@$IP")
+          SCP=(scp -i "$HOME/.ssh/ec2.pem" -o StrictHostKeyChecking=accept-new)
+          "${SSH[@]}" 'for i in $(seq 1 36); do docker info >/dev/null 2>&1 && exit 0; sudo docker info >/dev/null 2>&1 && exit 0; sleep 10; done; exit 1'
+          "${SSH[@]}" 'mkdir -p "$HOME/arkatasks"'
+          "${SCP[@]}" -r \
+            ArkaTask-employee-notification/docker-compose.yml \
+            ArkaTask-employee-notification/docker-compose.ecr.yml \
+            ArkaTask-employee-notification/nginx.conf \
+            ArkaTask-employee-notification/Jenkinsfile \
+            ArkaTask-employee-notification/deploy \
+            ArkaTask-employee-notification/supabase \
+            "ec2-user@$IP:arkatasks/"
+          "${SSH[@]}" 'sudo mkdir -p /usr/local/lib/docker/cli-plugins /usr/libexec/docker/cli-plugins && sudo curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64 && sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && sudo cp /usr/local/lib/docker/cli-plugins/docker-compose /usr/libexec/docker/cli-plugins/docker-compose'
+          aws ecr get-login-password --region eu-west-3 | "${SSH[@]}" 'sudo docker login --username AWS --password-stdin 034115073932.dkr.ecr.eu-west-3.amazonaws.com'
+          "${SSH[@]}" 'cd "$HOME/arkatasks" && ECR_REGISTRY=034115073932.dkr.ecr.eu-west-3.amazonaws.com bash deploy/compose-up.sh'

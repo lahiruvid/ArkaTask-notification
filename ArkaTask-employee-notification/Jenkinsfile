@@ -1,14 +1,19 @@
 pipeline {
   agent any
+  environment {
+    AWS_REGION = 'eu-west-3'
+    ECR_REGISTRY = '034115073932.dkr.ecr.eu-west-3.amazonaws.com'
+    ECR_REPO = 'arkatasks-employee-notification'
+  }
   stages {
-    stage('Build') {
+    stage('Build and push images') {
       steps {
-        sh 'docker compose -f docker-compose.yml build'
+        sh 'bash deploy/build-and-push.sh'
       }
     }
-    stage('Deploy') {
+    stage('Compose up') {
       steps {
-        sh 'docker compose -f docker-compose.yml up -d'
+        sh 'bash deploy/compose-up.sh'
       }
     }
   }

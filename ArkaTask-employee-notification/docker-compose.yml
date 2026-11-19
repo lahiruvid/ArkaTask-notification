@@ -43,6 +43,11 @@ services:
     ports:
       - "5672:5672"
 
+  zipkin:
+    image: openzipkin/zipkin:3
+    ports:
+      - "9411:9411"
+
   eureka:
     build: ./employee-service/eureka-server
     ports:
@@ -127,7 +132,7 @@ services:
       - login-service
       - clean-event-service
     ports:
-      - "8080:80"
+      - "8880:80"
       - "8443:443"
 
 volumes:
