@@ -130,3 +130,5 @@ jobs:
           "${SSH[@]}" 'sudo mkdir -p /usr/local/lib/docker/cli-plugins /usr/libexec/docker/cli-plugins && sudo curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64 && sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && sudo cp /usr/local/lib/docker/cli-plugins/docker-compose /usr/libexec/docker/cli-plugins/docker-compose'
           aws ecr get-login-password --region eu-west-3 | "${SSH[@]}" 'sudo docker login --username AWS --password-stdin 034115073932.dkr.ecr.eu-west-3.amazonaws.com'
           "${SSH[@]}" 'cd "$HOME/arkatasks" && ECR_REGISTRY=034115073932.dkr.ecr.eu-west-3.amazonaws.com bash deploy/compose-up.sh'
+          "${SCP[@]}" -r ArkaTask-employee-notification/e2e "ec2-user@$IP:arkatasks/"
+          "${SSH[@]}" 'cd "$HOME/arkatasks" && E2E_BASE_URL=http://127.0.0.1:8880 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 e2e/test_stack.py'
