@@ -1,19 +1,4 @@
 services:
-  jwt-init:
-    image: alpine:3.20
-    volumes:
-      - jwt-keys:/keys
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        if [ ! -f /keys/private.pem ]; then
-          apk add --no-cache openssl
-          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /keys/private.pem
-          openssl pkey -in /keys/private.pem -pubout -out /keys/public.pem
-          chmod 644 /keys/private.pem /keys/public.pem
-        fi
-    restart: "no"
-
   db:
     image: postgres:16-alpine
     environment:
@@ -59,13 +44,12 @@ services:
       SUPABASE_DB_URL: jdbc:postgresql://db:5432/arkatasks
       SUPABASE_DB_USER: arkatasks
       SUPABASE_DB_PASSWORD: arkatasks
-      JWT_PRIVATE_KEY_PATH: /keys/private.pem
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL=https://<project-ref>.supabase.co in .env or the environment}
+      SUPABASE_KEYS_FILE: /var/lib/arkatasks/supabase-keys.json
       APP_TIMEZONE: Europe/Rome
     volumes:
-      - jwt-keys:/keys:ro
+      - supabase-runtime:/var/lib/arkatasks
     depends_on:
-      jwt-init:
-        condition: service_completed_successfully
       db:
         condition: service_started
       eureka:
@@ -79,15 +63,14 @@ services:
       SUPABASE_DB_URL: jdbc:postgresql://db:5432/arkatasks
       SUPABASE_DB_USER: arkatasks
       SUPABASE_DB_PASSWORD: arkatasks
-      JWT_PUBLIC_KEY_PATH: /keys/public.pem
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL=https://<project-ref>.supabase.co in .env or the environment}
+      SUPABASE_KEYS_FILE: /var/lib/arkatasks/supabase-keys.json
       KAFKA_BOOTSTRAP: kafka:9092
       RABBIT_HOST: rabbitmq
       APP_TIMEZONE: Europe/Rome
     volumes:
-      - jwt-keys:/keys:ro
+      - supabase-runtime:/var/lib/arkatasks
     depends_on:
-      jwt-init:
-        condition: service_completed_successfully
       db:
         condition: service_started
       kafka:
@@ -138,4 +121,5 @@ services:
       - "8443:443"
 
 volumes:
-  jwt-keys:
+  # Holds supabase-keys.json (Supabase URL + anon key, mode 600). Shared by login and clean-event.
+  supabase-runtime:

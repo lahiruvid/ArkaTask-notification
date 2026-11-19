@@ -10,9 +10,18 @@ spring:
 app:
   timezone: ${APP_TIMEZONE:Europe/Rome}
   clean-event-url: ${CLEAN_EVENT_URL:http://clean-event-service:8082}
-jwt:
-  private-key-path: ${JWT_PRIVATE_KEY_PATH:/keys/private.pem}
-  ttl-hours: 12
+supabase:
+  # Project URL, e.g. https://<project-ref>.supabase.co . JWKS URL and issuer are derived from it.
+  url: ${SUPABASE_URL:}
+  jwks-url: ${SUPABASE_JWKS_URL:}
+  issuer: ${SUPABASE_JWT_ISSUER:}
+  audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
+  allowed-algs: ${SUPABASE_JWT_ALGS:RS256,ES256}
+  clock-skew-seconds: 30
+  jwks-min-refresh-seconds: 60
+  jwks-startup-attempts: 3
+  jwks-retry-seconds: 30
+  keys-file: ${SUPABASE_KEYS_FILE:/var/lib/arkatasks/supabase-keys.json}
 eureka:
   client:
     service-url:

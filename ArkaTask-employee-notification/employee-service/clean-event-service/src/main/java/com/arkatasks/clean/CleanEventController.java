@@ -2,16 +2,10 @@ package com.arkatasks.clean;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +19,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -38,25 +31,25 @@ public class CleanEventController {
   private final KafkaTemplate<String, String> kafka;
   private final RabbitTemplate rabbit;
   private final ObjectMapper json;
-  private final PublicKey publicKey;
   private final ZoneId zone;
   private final OwnerNotifierClient ownerNotifier;
+  private final EmployeeIdentityStore identities;
 
   public CleanEventController(
       JdbcTemplate jdbc,
       KafkaTemplate<String, String> kafka,
       RabbitTemplate rabbit,
       ObjectMapper json,
-      @Value("${jwt.public-key-path:/keys/public.pem}") String publicKeyPath,
       @Value("${app.timezone:Europe/Rome}") String timezone,
-      OwnerNotifierClient ownerNotifier) throws Exception {
+      OwnerNotifierClient ownerNotifier,
+      EmployeeIdentityStore identities) {
     this.jdbc = jdbc;
     this.kafka = kafka;
     this.rabbit = rabbit;
     this.json = json;
-    this.publicKey = readPublicKey(publicKeyPath);
     this.zone = ZoneId.of(timezone);
     this.ownerNotifier = ownerNotifier;
+    this.identities = identities;
   }
 
   @PostMapping("/api/employee-logins")
@@ -71,12 +64,20 @@ public class CleanEventController {
   @PostMapping("/api/cleans")
   @Transactional
   public Map<String, Object> markClean(
-      @RequestHeader(value = "Authorization", required = false) String authorization,
+      HttpServletRequest request,
       @RequestBody Map<String, String> body) throws Exception {
-    Claims claims = verify(authorization);
-    String employeeId = claims.getSubject();
-    String employeeName = claims.get("name", String.class);
-    String employeePhone = claims.get("phone", String.class);
+    // SupabaseAuthFilter already verified the Supabase access token for /api/cleans.
+    Claims claims = SupabaseAuthFilter.claims(request);
+    if (claims == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Employee login is required.");
+    }
+    EmployeeIdentityStore.Employee employee = identities.find(claims.getSubject());
+    if (employee == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Employee session expired. Sign in again.");
+    }
+    String employeeId = employee.employeeId();
+    String employeeName = employee.name();
+    String employeePhone = employee.phone();
     String apartmentId = body.getOrDefault("apartmentId", "").trim();
     String date = body.getOrDefault("date", "").trim();
     if (apartmentId.isEmpty() || date.isEmpty()) {
@@ -154,27 +155,5 @@ public class CleanEventController {
     event.put("employeeName", employeeName);
     event.put("employeePhone", employeePhone);
     return event;
-  }
-
-  private Claims verify(String authorization) {
-    if (authorization == null || !authorization.startsWith("Bearer ")) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Employee login is required.");
-    }
-    try {
-      return Jwts.parser().verifyWith(publicKey).build()
-          .parseSignedClaims(authorization.substring(7).trim())
-          .getPayload();
-    } catch (RuntimeException ex) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Employee login is required.");
-    }
-  }
-
-  private static PublicKey readPublicKey(String path) throws Exception {
-    String pem = Files.readString(Path.of(path))
-        .replace("-----BEGIN PUBLIC KEY-----", "")
-        .replace("-----END PUBLIC KEY-----", "")
-        .replaceAll("\\s", "");
-    return KeyFactory.getInstance("RSA")
-        .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(pem)));
   }
 }
