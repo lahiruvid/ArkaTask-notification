@@ -9,7 +9,7 @@ terraform {
 
 variable "aws_region" {
   type    = string
-  default = "eu-south-1"
+  default = "eu-west-3"
 }
 
 variable "ami_id" {

@@ -38,7 +38,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::034115073932:role/GitHubActionsRole
-          aws-region: eu-south-1
+          aws-region: eu-west-3
 
       # Install Terraform. Uses the credentials from the step above.
       - name: Setup Terraform
