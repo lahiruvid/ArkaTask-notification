@@ -4,6 +4,7 @@ import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
@@ -21,30 +22,38 @@ import org.junit.jupiter.api.Timeout;
  * Requires app_state to already contain the employee and a job for today.
  * Defaults: http://localhost:8080 and http://localhost:8083
  * Override with E2E_BASE_URL, E2E_NOTIFIER_URL, and E2E_PHONE.
+ *
+ * Login needs a real Supabase Auth access token (for example from an anonymous sign-in in the
+ * browser) plus the project URL and anon key: E2E_SUPABASE_ACCESS_TOKEN, E2E_SUPABASE_URL,
+ * E2E_SUPABASE_ANON_KEY. The test is skipped when they are not set. Never use a service_role key.
  */
 class EmployeeCleanJourneyTest {
   private final String baseUrl = env("E2E_BASE_URL", "http://localhost:8080");
   private final String notifierUrl = env("E2E_NOTIFIER_URL", "http://localhost:8083");
   private final String phone = env("E2E_PHONE", "+393331112222");
+  private final String accessToken = env("E2E_SUPABASE_ACCESS_TOKEN", "");
+  private final String supabaseUrl = env("E2E_SUPABASE_URL", "");
+  private final String anonKey = env("E2E_SUPABASE_ANON_KEY", "");
 
   @Test
   @Timeout(40)
   void employeeLoginCleanTapReachesOwnerNotifier() throws InterruptedException {
+    assumeFalse(accessToken.isBlank() || supabaseUrl.isBlank() || anonKey.isBlank(),
+        "Set E2E_SUPABASE_ACCESS_TOKEN, E2E_SUPABASE_URL and E2E_SUPABASE_ANON_KEY");
     Response login = given()
         .contentType(ContentType.JSON)
-        .body(Map.of("phone", phone))
+        .header("Authorization", "Bearer " + accessToken)
+        .body(Map.of("phone", phone, "supabaseUrl", supabaseUrl, "supabaseAnonKey", anonKey))
         .post(baseUrl + "/api/login")
         .then()
         .statusCode(200)
         .extract()
         .response();
 
-    String token = login.jsonPath().getString("token");
+    String token = accessToken;
     String employeeName = login.jsonPath().getString("name");
     String today = login.jsonPath().getString("todayDate");
     List<Map<String, String>> apartments = login.jsonPath().getList("today");
-    assertNotNull(token);
-    assertFalse(token.isBlank(), "login-service did not return a JWT");
     assertNotNull(apartments);
     assertFalse(apartments.isEmpty(), "employee " + employeeName + " has no apartment for " + today);
 

@@ -108,8 +108,23 @@ jobs:
       - name: Run the Jenkins compose stage on EC2
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          # Public Supabase project URL, e.g. https://<project-ref>.supabase.co.
+          # The Actions variable wins when set; otherwise the repository secret of the same name is used.
+          # Java derives the JWKS URL and token issuer from it. Never put a service_role key here.
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
         run: |
           set -euo pipefail
+          # Secrets pasted in the UI sometimes include a trailing newline.
+          SUPABASE_URL=$(printf '%s' "${SUPABASE_URL:-}" | tr -d '[:space:]')
+          if [ -z "${SUPABASE_URL:-}" ]; then
+            echo "::error::SUPABASE_URL is not set. Add it as an Actions secret or variable (Settings > Secrets and variables > Actions). Employee login cannot verify Supabase tokens without it."
+            exit 1
+          fi
+          SUPABASE_URL="${SUPABASE_URL%/}"
+          if ! printf '%s' "$SUPABASE_URL" | grep -Eq '^https://[A-Za-z0-9.-]+$'; then
+            echo "::error::SUPABASE_URL must look like https://<project-ref>.supabase.co"
+            exit 1
+          fi
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$EC2_SSH_KEY" > "$HOME/.ssh/ec2.pem"
           chmod 600 "$HOME/.ssh/ec2.pem"
@@ -129,6 +144,6 @@ jobs:
             "ec2-user@$IP:arkatasks/"
           "${SSH[@]}" 'sudo mkdir -p /usr/local/lib/docker/cli-plugins /usr/libexec/docker/cli-plugins && sudo curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64 && sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && sudo cp /usr/local/lib/docker/cli-plugins/docker-compose /usr/libexec/docker/cli-plugins/docker-compose'
           aws ecr get-login-password --region eu-west-3 | "${SSH[@]}" 'sudo docker login --username AWS --password-stdin 034115073932.dkr.ecr.eu-west-3.amazonaws.com'
-          "${SSH[@]}" 'cd "$HOME/arkatasks" && ECR_REGISTRY=034115073932.dkr.ecr.eu-west-3.amazonaws.com bash deploy/compose-up.sh'
+          "${SSH[@]}" "cd \"\$HOME/arkatasks\" && SUPABASE_URL='$SUPABASE_URL' ECR_REGISTRY=034115073932.dkr.ecr.eu-west-3.amazonaws.com bash deploy/compose-up.sh"
           "${SCP[@]}" -r ArkaTask-employee-notification/e2e "ec2-user@$IP:arkatasks/"
           "${SSH[@]}" 'cd "$HOME/arkatasks" && E2E_BASE_URL=http://127.0.0.1:8880 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 e2e/test_stack.py'

@@ -2,21 +2,16 @@ package com.arkatasks.login;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.Jwts;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.KeyFactory;
-import java.security.PrivateKey;
-import java.security.spec.PKCS8EncodedKeySpec;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 // Rate limit disabled for E2E. Restore: import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -29,36 +24,48 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Employee phone login. The caller must already hold a Supabase Auth access token
+ * (checked by SupabaseAuthFilter before this runs). This service never signs tokens.
+ * The phone check still reads app_state in Postgres. The project URL and anon key are
+ * saved only after that read succeeds; the JWKS URL is never taken from the request.
+ */
 @RestController
 public class LoginController {
+  private static final Logger log = LoggerFactory.getLogger(LoginController.class);
   private final JdbcTemplate jdbc;
   private final ObjectMapper json;
   private final ZoneId zone;
-  private final PrivateKey privateKey;
-  private final int ttlHours;
   private final PhoneLoginLimiter phoneLimits;
   private final CleanEventClient cleanEventClient;
+  private final SupabaseKeysFile keysFile;
+  private final EmployeeIdentityStore identities;
 
   public LoginController(
       JdbcTemplate jdbc,
       ObjectMapper json,
       @Value("${app.timezone:Europe/Rome}") String timezone,
-      @Value("${jwt.private-key-path:/keys/private.pem}") String privateKeyPath,
-      @Value("${jwt.ttl-hours:12}") int ttlHours,
       PhoneLoginLimiter phoneLimits,
-      CleanEventClient cleanEventClient) throws Exception {
+      CleanEventClient cleanEventClient,
+      SupabaseKeysFile keysFile,
+      EmployeeIdentityStore identities) {
     this.jdbc = jdbc;
     this.json = json;
     this.zone = ZoneId.of(timezone);
-    this.privateKey = readPrivateKey(privateKeyPath);
-    this.ttlHours = ttlHours;
     this.phoneLimits = phoneLimits;
     this.cleanEventClient = cleanEventClient;
+    this.keysFile = keysFile;
+    this.identities = identities;
   }
 
   @PostMapping("/api/login")
   // @RateLimiter(name = "login", fallbackMethod = "loginRateLimited")
-  public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body) throws Exception {
+  public ResponseEntity<Map<String, Object>> login(
+      HttpServletRequest request, @RequestBody Map<String, String> body) throws Exception {
+    Claims claims = SupabaseAuthFilter.claims(request);
+    if (claims == null) {
+      return error(HttpStatus.UNAUTHORIZED, "Employee login is required.");
+    }
     String typed = digits(body.get("phone"));
     if (typed.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is required.");
@@ -66,9 +73,25 @@ public class LoginController {
     // if (!phoneLimits.allow(typed)) {
     //   return loginRateLimited(body, null);
     // }
+    SupabaseKeysFile.Creds creds;
+    try {
+      creds = keysFile.validate(body.get("supabaseUrl"), body.get("supabaseAnonKey"));
+    } catch (SupabaseKeysFile.RejectedKeys ex) {
+      return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+    // The token's issuer must be this same project. The JWKS itself comes only from server config.
+    if (!(creds.url() + "/auth/v1").equals(claims.getIssuer())) {
+      return error(HttpStatus.BAD_REQUEST, "Supabase project URL does not match the signed-in project.");
+    }
     String payload = jdbc.query(
         "select payload::text from app_state where id = 'main'",
         rs -> rs.next() ? rs.getString(1) : null);
+    try {
+      keysFile.save(creds.url(), creds.anonKey());
+    } catch (java.io.IOException | RuntimeException ex) {
+      log.error("Could not write the Supabase keys file {}: {}", keysFile.path(), ex.getClass().getSimpleName());
+      return error(HttpStatus.SERVICE_UNAVAILABLE, "Could not store the Supabase keys.");
+    }
     if (payload == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No employee found with that phone number.");
     }
@@ -90,19 +113,14 @@ public class LoginController {
     String employeeId = match.path("id").asText("");
     String name = match.path("name").asText("").trim();
     String phone = match.path("phone").asText("");
+    try {
+      identities.save(claims.getSubject(), employeeId, name, phone);
+    } catch (RuntimeException ex) {
+      return error(HttpStatus.SERVICE_UNAVAILABLE, "Could not store the employee session.");
+    }
     LocalDate today = LocalDate.now(zone);
     LocalDate tomorrow = today.plusDays(1);
-    Instant now = Instant.now();
-    String token = Jwts.builder()
-        .subject(employeeId)
-        .claim("name", name)
-        .claim("phone", phone)
-        .issuedAt(Date.from(now))
-        .expiration(Date.from(now.plusSeconds(ttlHours * 3600L)))
-        .signWith(privateKey, Jwts.SIG.RS256)
-        .compact();
     Map<String, Object> out = new LinkedHashMap<>();
-    out.put("token", token);
     out.put("employeeId", employeeId);
     out.put("name", name);
     out.put("todayDate", today.toString());
@@ -136,6 +154,12 @@ public class LoginController {
     Map<String, Object> error = new LinkedHashMap<>();
     error.put("error", "Too many login attempts for this phone number. Try again in 15 minutes.");
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
+  }
+
+  private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("error", message);
+    return ResponseEntity.status(status).body(body);
   }
 
   private static List<Map<String, String>> apartments(JsonNode jobs, String employeeId, String day) {
@@ -175,14 +199,5 @@ public class LoginController {
 
   private static String digits(String value) {
     return value == null ? "" : value.replaceAll("\\D", "");
-  }
-
-  private static PrivateKey readPrivateKey(String path) throws Exception {
-    String pem = Files.readString(Path.of(path))
-        .replace("-----BEGIN PRIVATE KEY-----", "")
-        .replace("-----END PRIVATE KEY-----", "")
-        .replaceAll("\\s", "");
-    byte[] encoded = Base64.getDecoder().decode(pem);
-    return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(encoded));
   }
 }
