@@ -1,0 +1,55 @@
+server:
+  port: 8081
+spring:
+  application:
+    name: login-service
+  datasource:
+    url: ${SUPABASE_DB_URL:jdbc:postgresql://db:5432/arkatasks}
+    username: ${SUPABASE_DB_USER:arkatasks}
+    password: ${SUPABASE_DB_PASSWORD:arkatasks}
+app:
+  timezone: ${APP_TIMEZONE:Europe/Rome}
+  clean-event-url: ${CLEAN_EVENT_URL:http://clean-event-service:8082}
+jwt:
+  private-key-path: ${JWT_PRIVATE_KEY_PATH:/keys/private.pem}
+  ttl-hours: 12
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+resilience4j:
+  ratelimiter:
+    configs:
+      per-phone:
+        # 5 attempts per phone number per 15 minutes. Tune these two values.
+        limit-for-period: 5
+        limit-refresh-period: 15m
+        timeout-duration: 0s
+    instances:
+      # @RateLimiter on POST /api/login. Wide endpoint backstop, not per phone.
+      login:
+        limit-for-period: 60
+        limit-refresh-period: 1m
+        timeout-duration: 0s
+      # Copied onto one limiter per phone number.
+      per-phone:
+        base-config: per-phone
+  retry:
+    instances:
+      interService:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.RestClientException

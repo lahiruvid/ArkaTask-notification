@@ -1,0 +1,13 @@
+package com.arkatasks.clean;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableScheduling
+public class CleanEventApplication {
+  public static void main(String[] args) {
+    SpringApplication.run(CleanEventApplication.class, args);
+  }
+}
