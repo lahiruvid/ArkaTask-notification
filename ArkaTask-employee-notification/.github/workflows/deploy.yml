@@ -19,16 +19,14 @@ jobs:
     steps:
       # Repo files are required before Terraform runs.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # Assume the IAM role with GitHub OIDC. Fill in the account and role name.
+      # GitHub mints the OIDC token. Do not point at a token file.
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::034115073932:role/GitHubActionsRole
           aws-region: eu-south-1
-          # Path to the OIDC web identity token. Replace this placeholder.
-          web-identity-token-file: ${{ github.workspace }}/.oidc-token
 
       # Install Terraform. Uses the credentials from the step above.
       - name: Setup Terraform
