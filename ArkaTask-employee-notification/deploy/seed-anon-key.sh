@@ -18,8 +18,8 @@ compose() {
 }
 
 running=""
-for _ in $(seq 1 30); do
-  running=$(compose ps -q login-service || true)
+for _ in $(seq 1 60); do
+  running=$(compose ps --status running -q login-service || true)
   if [ -n "$running" ]; then
     break
   fi

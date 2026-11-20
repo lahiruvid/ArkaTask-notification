@@ -175,7 +175,8 @@ jobs:
           import os
           from pathlib import Path
           raw = os.environ["OCI_PRIVATE_KEY"]
-          if "\\n" in raw and "-----BEGIN" not in raw.splitlines()[0]:
+          # A one-line GitHub secret stores the PEM as the two characters \ and n.
+          if "\\n" in raw and raw.count("\n") <= 1:
               raw = raw.replace("\\n", "\n")
           if not raw.endswith("\n"):
               raw += "\n"
@@ -250,7 +251,7 @@ jobs:
           import os
           from pathlib import Path
           raw = os.environ["OCI_SSH_PRIVATE_KEY"]
-          if "\\n" in raw and "-----BEGIN" not in raw.splitlines()[0]:
+          if "\\n" in raw and raw.count("\n") <= 1:
               raw = raw.replace("\\n", "\n")
           if not raw.endswith("\n"):
               raw += "\n"
