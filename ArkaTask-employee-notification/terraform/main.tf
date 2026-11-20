@@ -75,6 +75,22 @@ resource "aws_security_group" "employee" {
     cidr_blocks = [var.ssh_cidr]
   }
 
+  ingress {
+    description = "Java HTTPS 8081"
+    from_port   = 8081
+    to_port     = 8081
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Java HTTPS 8082"
+    from_port   = 8082
+    to_port     = 8082
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

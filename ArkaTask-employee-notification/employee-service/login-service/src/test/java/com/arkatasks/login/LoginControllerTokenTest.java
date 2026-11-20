@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,15 +20,12 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Phone check stays on the local app_state row. This repo has no Supabase REST client;
- * the patch's copy used one, and that call is not part of the outbox path here.
+ * Phone check reads Supabase app_state through SupabaseAppState. The HTTP call itself is covered
+ * by SupabaseAppStateTest; here the client is mocked so login rules stay local.
  */
 class LoginControllerTokenTest {
   static final String URL = "https://testref.supabase.co";
@@ -37,22 +35,23 @@ class LoginControllerTokenTest {
   @TempDir
   Path dir;
 
-  JdbcTemplate jdbc;
+  ObjectMapper json;
+  SupabaseAppState appState;
   SupabaseKeysFile keys;
   EmployeeIdentityStore identities;
   CleanEventClient cleanEvent;
   LoginController controller;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
-  void setUp() {
-    jdbc = mock(JdbcTemplate.class);
-    when(jdbc.query(any(String.class), any(ResultSetExtractor.class))).thenReturn(PAYLOAD);
-    keys = new SupabaseKeysFile(dir.resolve("supabase-keys.json"), URL, new ObjectMapper());
+  void setUp() throws Exception {
+    json = new ObjectMapper();
+    appState = mock(SupabaseAppState.class);
+    when(appState.fetch(eq(URL), any(String.class))).thenReturn(json.readTree(PAYLOAD));
+    keys = new SupabaseKeysFile(dir.resolve("supabase-keys.json"), URL, json);
     identities = mock(EmployeeIdentityStore.class);
     cleanEvent = mock(CleanEventClient.class);
-    controller = new LoginController(jdbc, new ObjectMapper(), "Europe/Rome", mock(PhoneLoginLimiter.class),
-        cleanEvent, keys, identities);
+    controller = new LoginController("Europe/Rome", mock(PhoneLoginLimiter.class),
+        cleanEvent, keys, identities, appState);
   }
 
   MockHttpServletRequest withClaims() {
@@ -67,12 +66,11 @@ class LoginControllerTokenTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void noVerifiedTokenMeans401AndNothingSaved() throws Exception {
     var res = controller.login(new MockHttpServletRequest(), body(SupabaseKeysFileTest.fakeJwt("anon")));
     assertEquals(401, res.getStatusCode().value());
     assertFalse(Files.exists(keys.path()));
-    verify(jdbc, never()).query(any(String.class), any(ResultSetExtractor.class));
+    verify(appState, never()).fetch(any(), any());
   }
 
   @Test
@@ -86,6 +84,7 @@ class LoginControllerTokenTest {
     assertEquals(anon, keys.read().anonKey());
     assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(
         Files.getPosixFilePermissions(keys.path())));
+    verify(appState).fetch(URL, anon);
     verify(identities).save("auth-uid-1", "e1", "Ana", "+39 333 111 2222");
     verify(cleanEvent).employeeOpened("e1", "Ana");
   }
@@ -98,34 +97,44 @@ class LoginControllerTokenTest {
     var res = controller.login(req, body(SupabaseKeysFileTest.fakeJwt("anon")));
     assertEquals(400, res.getStatusCode().value());
     assertFalse(Files.exists(keys.path()));
+    verify(appState, never()).fetch(any(), any());
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void serviceRoleKeyRefused() throws Exception {
     var res = controller.login(withClaims(), body(SupabaseKeysFileTest.fakeJwt("service_role")));
     assertEquals(400, res.getStatusCode().value());
     assertFalse(Files.exists(keys.path()));
-    verify(jdbc, never()).query(any(String.class), any(ResultSetExtractor.class));
+    verify(appState, never()).fetch(any(), any());
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  void databaseFailureDoesNotSaveKeys() {
-    when(jdbc.query(any(String.class), any(ResultSetExtractor.class)))
-        .thenThrow(new DataAccessResourceFailureException("db down"));
-    assertThrows(DataAccessResourceFailureException.class,
-        () -> controller.login(withClaims(), body(SupabaseKeysFileTest.fakeJwt("anon"))));
+  void supabaseFailureDoesNotSaveKeys() throws Exception {
+    when(appState.fetch(eq(URL), any(String.class))).thenThrow(new SupabaseAppState.Unavailable());
+    var res = controller.login(withClaims(), body(SupabaseKeysFileTest.fakeJwt("anon")));
+    assertEquals(503, res.getStatusCode().value());
     assertNull(keys.read());
+    verify(identities, never()).save(any(), any(), any(), any());
   }
 
   @Test
-  void unknownPhoneIs404AndNoIdentity() {
+  void unknownPhoneIs404AndNoIdentity() throws Exception {
     String anon = SupabaseKeysFileTest.fakeJwt("anon");
     var ex = assertThrows(ResponseStatusException.class,
         () -> controller.login(withClaims(), Map.of("phone", "999", "supabaseUrl", URL, "supabaseAnonKey", anon)));
     assertEquals(404, ex.getStatusCode().value());
     verify(identities, never()).save(any(), any(), any(), any());
     assertTrue(Files.exists(keys.path()), "keys are saved once the token was valid and the database read succeeded");
+  }
+
+  @Test
+  void employeeLookupUsesSavedAnonKey() throws Exception {
+    String anon = SupabaseKeysFileTest.fakeJwt("anon");
+    keys.save(URL, anon);
+    when(appState.fetch(URL, anon)).thenReturn(json.readTree(PAYLOAD));
+    Map<String, String> found = controller.employee("e1");
+    assertEquals("Ana", found.get("name"));
+    assertEquals("+39 333 111 2222", found.get("phone"));
+    verify(appState).fetch(URL, anon);
   }
 }

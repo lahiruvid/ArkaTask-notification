@@ -55,7 +55,7 @@ services:
       eureka:
         condition: service_started
     ports:
-      - "8081:8081"
+      - "127.0.0.1:18081:8081"
 
   clean-event-service:
     build: ./employee-service/clean-event-service
@@ -80,7 +80,7 @@ services:
       eureka:
         condition: service_started
     ports:
-      - "8082:8082"
+      - "127.0.0.1:18082:8082"
 
   owner-notifier:
     build: ./owner-notifier
