@@ -1,13 +1,13 @@
 package com.arkatasks.notify;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Last WhatsApp notice, for operators and the E2E test on the VM (127.0.0.1:18083).
+ * Nginx does not publish it: the notice holds a phone number.
+ */
 @RestController
 public class NotifierController {
   private final OwnerNotifier notifier;
@@ -19,11 +19,5 @@ public class NotifierController {
   @GetMapping("/api/notifications/latest")
   public Map<String, String> latest() {
     return notifier.latest();
-  }
-
-  @PostMapping("/api/notifications")
-  public ResponseEntity<Void> receive(@RequestBody JsonNode body) throws Exception {
-    notifier.onClean(body.toString());
-    return ResponseEntity.noContent().build();
   }
 }
