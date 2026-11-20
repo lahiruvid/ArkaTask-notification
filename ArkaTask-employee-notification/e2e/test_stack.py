@@ -64,6 +64,14 @@ def request(method, url, body=None, headers=None, timeout=20):
         return err.code, dict(err.headers), err.read()
 
 
+def app_error(status, raw):
+    """True when the answer came from a Spring service (JSON error), not from Nginx."""
+    try:
+        return status in (400, 401, 429, 503) and "error" in json.loads(raw)
+    except ValueError:
+        return False
+
+
 class StackTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -75,8 +83,28 @@ class StackTests(unittest.TestCase):
         self.assertIn(b"UP", raw)
 
     def test_02_login_endpoint_is_proxied(self):
+        # No token: login-service answers 401, or 503 before any Supabase project is known.
         status, _, raw = request("POST", BASE + "/api/login", {"phone": "0"})
-        self.assertNotIn(status, (502, 503, 504), raw[:300])
+        self.assertTrue(app_error(status, raw), "%s %s" % (status, raw[:300]))
+
+    def test_03_clean_endpoint_is_proxied(self):
+        status, _, raw = request("POST", BASE + "/api/cleans", {"apartmentId": "a", "date": "2026-01-01"})
+        self.assertTrue(app_error(status, raw), "%s %s" % (status, raw[:300]))
+
+    def test_04_cors_preflight(self):
+        status, headers, _ = request("OPTIONS", BASE + "/api/cleans", headers={
+            "Origin": "https://example.pages.dev",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        })
+        self.assertEqual(status, 204)
+        self.assertTrue(headers.get("Access-Control-Allow-Origin"))
+        self.assertIn("Authorization", headers.get("Access-Control-Allow-Headers", ""))
+
+    def test_05_internal_endpoints_are_not_public(self):
+        for path in ("/api/notifications/latest", "/api/employees/e1", "/actuator/metrics", "/api/employee-logins"):
+            status, _, _ = request("GET", BASE + path)
+            self.assertEqual(status, 404, path)
 
     def test_08_zipkin_health(self):
         status, _, raw = request("GET", ZIPKIN + "/health")
