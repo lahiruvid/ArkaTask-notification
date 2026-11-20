@@ -1,5 +1,6 @@
 # Image names produced by deploy/build-arm.sh.
 # REGISTRY=local uses images loaded on this host. An OCIR prefix pulls when missing.
+# Nginx is the stock image in docker-compose.yml, not a built tag.
 services:
   eureka:
     image: ${REGISTRY:-local}/arkatasks-employee-notification:eureka
@@ -12,7 +13,4 @@ services:
     pull_policy: if_not_present
   owner-notifier:
     image: ${REGISTRY:-local}/arkatasks-employee-notification:owner-notifier
-    pull_policy: if_not_present
-  nginx:
-    image: ${REGISTRY:-local}/arkatasks-employee-notification:nginx
     pull_policy: if_not_present

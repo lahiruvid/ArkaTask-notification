@@ -6,7 +6,6 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-REPO_DIR="$(cd "$APP_DIR/.." && pwd)"
 REGISTRY="${REGISTRY:-local}"
 PLATFORM="${PLATFORM:-linux/arm64}"
 IMAGE_NAME="${IMAGE_NAME:-arkatasks-employee-notification}"
@@ -44,4 +43,3 @@ build eureka "$APP_DIR/employee-service/eureka-server"
 build login-service "$APP_DIR/employee-service/login-service"
 build clean-event-service "$APP_DIR/employee-service/clean-event-service"
 build owner-notifier "$APP_DIR/owner-notifier"
-build nginx "$REPO_DIR" "$APP_DIR/Dockerfile.frontend"

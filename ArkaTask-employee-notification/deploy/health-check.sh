@@ -28,7 +28,7 @@ wait_url() {
   return 1
 }
 
-wait_url "http://127.0.0.1/"
+wait_url "http://127.0.0.1/actuator/health"
 wait_url "http://127.0.0.1:18081/actuator/health"
 wait_url "http://127.0.0.1:18082/actuator/health"
 wait_url "http://127.0.0.1:9411/health"

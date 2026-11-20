@@ -55,9 +55,7 @@ public class SupabaseKeysFile {
     if (cleanUrl.isEmpty() || cleanKey.isEmpty()) {
       throw new RejectedKeys("Supabase project URL and anon key are required.");
     }
-    if (!cleanUrl.startsWith("https://")) {
-      throw new RejectedKeys("Supabase project URL must use https.");
-    }
+    cleanUrl = requireProjectUrl(cleanUrl);
     if (!expectedUrl.isEmpty() && !expectedUrl.equalsIgnoreCase(cleanUrl)) {
       throw new RejectedKeys("Supabase project URL does not match this server.");
     }
@@ -142,6 +140,24 @@ public class SupabaseKeysFile {
     if (!"anon".equals(role)) {
       throw new RejectedKeys("Only the Supabase anon key is allowed, never service_role.");
     }
+  }
+
+  /** https://&lt;project-ref&gt;.supabase.co with no user, port, or other host. */
+  public static String requireProjectUrl(String raw) {
+    String value = normalizeUrl(raw);
+    if (!value.regionMatches(true, 0, "https://", 0, 8)) {
+      throw new RejectedKeys("Supabase project URL must use https.");
+    }
+    String host = value.substring("https://".length());
+    int slash = host.indexOf('/');
+    if (slash >= 0) {
+      host = host.substring(0, slash);
+    }
+    if (host.indexOf('@') >= 0 || host.indexOf(':') >= 0
+        || !host.matches("(?i)[a-z0-9-]+\\.supabase\\.co")) {
+      throw new RejectedKeys("Supabase project URL must be https://<project-ref>.supabase.co");
+    }
+    return "https://" + host.toLowerCase();
   }
 
   public static String normalizeUrl(String raw) {

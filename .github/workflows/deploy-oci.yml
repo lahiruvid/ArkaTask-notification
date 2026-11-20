@@ -42,9 +42,8 @@ jobs:
           OCI_SSH_CIDR: ${{ secrets.OCI_SSH_CIDR }}
           TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
           TF_STATE_NAMESPACE: ${{ secrets.TF_STATE_NAMESPACE }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           JENKINS_ADMIN_PASSWORD: ${{ secrets.JENKINS_ADMIN_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           OCI_AVAILABILITY_DOMAIN_INDEX: ${{ secrets.OCI_AVAILABILITY_DOMAIN_INDEX }}
           OCIR_REGION_KEY: ${{ secrets.OCIR_REGION_KEY }}
@@ -66,8 +65,6 @@ jobs:
             OCI_SSH_CIDR
             TF_STATE_BUCKET
             TF_STATE_NAMESPACE
-            SUPABASE_URL
-            DB_PASSWORD
             JENKINS_ADMIN_PASSWORD
           )
           for name in "${required[@]}"; do
@@ -100,17 +97,6 @@ jobs:
             ssh-*|ecdsa-*) ;;
             *)
               echo "::error::OCI_SSH_PUBLIC_KEY must be an OpenSSH public key"
-              exit 1
-              ;;
-          esac
-          supabase="${SUPABASE_URL%/}"
-          if ! printf '%s' "$supabase" | grep -Eq '^https://[A-Za-z0-9.-]+$'; then
-            echo "::error::SUPABASE_URL must look like https://<project-ref>.supabase.co"
-            exit 1
-          fi
-          case "$DB_PASSWORD" in
-            *$'\n'*|*$'\r'*)
-              echo "::error::DB_PASSWORD must be a single line"
               exit 1
               ;;
           esac
@@ -237,10 +223,7 @@ jobs:
         env:
           PUBLIC_IP: ${{ steps.terraform.outputs.public_ip }}
           OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           JENKINS_ADMIN_PASSWORD: ${{ secrets.JENKINS_ADMIN_PASSWORD }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           OCIR_REGION_KEY: ${{ secrets.OCIR_REGION_KEY }}
           OCIR_NAMESPACE: ${{ secrets.OCIR_NAMESPACE }}
           OCIR_USERNAME: ${{ secrets.OCIR_USERNAME }}
@@ -290,16 +273,13 @@ jobs:
           # printf %q keeps secrets out of the remote command text as raw values.
           "${ssh_base[@]}" "ubuntu@${PUBLIC_IP}" bash -s <<REMOTE
           set -euo pipefail
-          export SUPABASE_URL=$(printf '%q' "${SUPABASE_URL%/}")
-          export DB_PASSWORD=$(printf '%q' "$DB_PASSWORD")
           export JENKINS_ADMIN_PASSWORD=$(printf '%q' "$JENKINS_ADMIN_PASSWORD")
-          export SUPABASE_ANON_KEY=$(printf '%q' "${SUPABASE_ANON_KEY:-}")
           export OCIR_REGION_KEY=$(printf '%q' "${OCIR_REGION_KEY:-}")
           export OCIR_NAMESPACE=$(printf '%q' "${OCIR_NAMESPACE:-}")
           export OCIR_USERNAME=$(printf '%q' "${OCIR_USERNAME:-}")
           export OCIR_AUTH_TOKEN=$(printf '%q' "${OCIR_AUTH_TOKEN:-}")
           bash /opt/arkatasks/ArkaTask-employee-notification/deploy/vm-jenkins-deploy.sh
           REMOTE
-          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors "http://${PUBLIC_IP}/" -o /dev/null
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors "http://${PUBLIC_IP}/actuator/health" -o /dev/null
           "${ssh_base[@]}" "ubuntu@${PUBLIC_IP}" \
             "cd /opt/arkatasks/ArkaTask-employee-notification && docker compose -f docker-compose.yml -f docker-compose.registry.yml ps"

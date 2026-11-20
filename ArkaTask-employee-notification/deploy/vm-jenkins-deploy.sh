@@ -3,14 +3,10 @@
 set -euo pipefail
 cd /opt/arkatasks/ArkaTask-employee-notification
 
-: "${SUPABASE_URL:?SUPABASE_URL is required}"
-: "${DB_PASSWORD:?DB_PASSWORD is required}"
 : "${JENKINS_ADMIN_PASSWORD:?JENKINS_ADMIN_PASSWORD is required}"
-SUPABASE_URL="${SUPABASE_URL%/}"
 
-python3 deploy/envfile.py SUPABASE_URL "$SUPABASE_URL"
-python3 deploy/envfile.py DB_PASSWORD "$DB_PASSWORD"
 python3 deploy/envfile.py REGISTRY "${REGISTRY:-local}"
+# Leave Supabase URL and anon key empty. POST /api/login fills the keys file.
 sudo chgrp jenkins .env
 sudo chmod 660 .env
 

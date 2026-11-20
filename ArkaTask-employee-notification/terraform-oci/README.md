@@ -21,11 +21,10 @@ The default security list that Oracle creates with the VCN is emptied of ingress
 
 ## Memory
 
-Container limits in `docker-compose.yml` add up to about 5 GB:
+Container limits in `docker-compose.yml` add up to about 3.9 GB:
 
 | Service | Limit |
 | --- | --- |
-| db | 1 GB |
 | kafka | 768 MB (heap 512 MB) |
 | rabbitmq | 512 MB |
 | zipkin | 384 MB |
@@ -35,7 +34,7 @@ Container limits in `docker-compose.yml` add up to about 5 GB:
 | owner-notifier | 512 MB |
 | nginx | 128 MB |
 
-Jenkins is capped at a 768 MB heap (about 1 GB resident). Ubuntu and Docker use the rest of the 12 GB. Bootstrap also adds a 2 GB swap file. Postgres data is on the `pgdata` volume, so it survives `compose up` but not replacement of the instance.
+Container limits add up to about 3.9 GB. Jenkins is capped at a 768 MB heap (about 1 GB resident). Ubuntu and Docker use the rest of the 12 GB. Bootstrap also adds a 2 GB swap file. There is no Postgres container. Supabase holds the data. Nginx is the stock `nginx:1.27-alpine` image. `Dockerfile.frontend` stays in the repo and is not built here.
 
 ## One-time state bucket
 
@@ -74,8 +73,6 @@ Required. The workflow stops before Terraform if any of these are missing or mal
 | `OCI_SSH_CIDR` | Who may open port 22, such as `203.0.113.10/32` |
 | `TF_STATE_BUCKET` | Bucket name from the one-time step |
 | `TF_STATE_NAMESPACE` | Object Storage namespace |
-| `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
-| `DB_PASSWORD` | Postgres password. One line. |
 | `JENKINS_ADMIN_PASSWORD` | Jenkins user `admin`. One line, at least 8 characters. |
 
 Optional.
@@ -83,7 +80,7 @@ Optional.
 | Secret | Value |
 | --- | --- |
 | `OCI_AVAILABILITY_DOMAIN_INDEX` | `0`, `1`, or `2` if the first availability domain has no A1 capacity. Default is 0. |
-| `SUPABASE_ANON_KEY` | Anon JWT (`role` is `anon`) or an `sb_publishable_` key. A `service_role` JWT or `sb_secret_` key fails the workflow. Leave unset to save the key later in the app. |
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` are not deploy secrets. They stay empty until `POST /api/login` saves them. A `service_role` key is refused. Optional `SUPABASE_ANON_KEY` is checked only when someone sets it.
 | `OCIR_REGION_KEY` | Short region key, such as `fra` for `eu-frankfurt-1`. |
 | `OCIR_NAMESPACE` | Tenancy namespace used by OCIR. |
 | `OCIR_USERNAME` | OCIR username after the namespace slash. Identity Cloud users include the `oracleidentitycloudservice/` prefix. |
@@ -99,7 +96,7 @@ The workflow never reads a Supabase service role key. Do not add one.
 2. It writes the API key to a file mode `600`, then `terraform init` with `-backend-config`, `terraform plan -out=tfplan`, and `terraform apply tfplan`.
 3. It reads the `public_ip` output and waits up to 20 minutes for `/var/lib/arkatasks-bootstrap.done`.
 4. It rsyncs this repo to `/opt/arkatasks` on the VM as `ubuntu`.
-5. It writes `.env` (`SUPABASE_URL`, `DB_PASSWORD`, `REGISTRY=local`), the Jenkins password file, and, when provided, the anon-key seed and `.ocir.env`.
+5. It writes `.env` with `REGISTRY=local` and the Jenkins password file. Supabase URL and anon key stay empty until `POST /api/login`.
 6. It runs `deploy/arkatasks-configure-jenkins.sh`, which turns the setup wizard off, binds Jenkins to `127.0.0.1:8080`, sets the admin user from the password file, seeds the job `arkatasks-deploy` from the Jenkinsfile, restarts Jenkins, and checks that the Jenkins process is in the `docker` group.
 7. It triggers that job, prints the console log, and fails if the build is not `SUCCESS`.
 8. It checks `http://<public-ip>/` and prints `docker compose ps`.
@@ -154,13 +151,14 @@ Changing `bootstrap.sh` after the first apply does not rebuild the VM (`ignore_c
 | `login-service` | `employee-service/login-service` |
 | `clean-event-service` | `employee-service/clean-event-service` |
 | `owner-notifier` | `owner-notifier` |
-| `nginx` | repository root (`Dockerfile.frontend` copies `package.json` and `nginx.conf` from there) |
+
+Nginx is `nginx:1.27-alpine` from Docker Hub, not a built tag.
 
 ## Risks
 
 - Always Free A1 capacity is often unavailable (`Out of host capacity`). Set `OCI_AVAILABILITY_DOMAIN_INDEX` to another domain and rerun. Do not terminate the instance casually; capacity may not come back.
 - Idle Always Free A1 instances can be reclaimed when CPU, network, and memory stay under 20% for 7 days.
-- Replacing the instance deletes the boot volume, including `pgdata`.
+- Replacing the instance deletes the boot volume. Application data lives in Supabase, not on this disk.
 - A reserved public IP that you detach and leave unused can be billed. This stack keeps it attached.
 - Docker-published ports are reached through the NSG. Host iptables rules are still opened for 80 and 443 because Ubuntu images REJECT other inbound traffic, but the NSG is what blocks 5432 and the other application ports.
 - Nginx generates a self-signed certificate the first time the container starts. Port 80 is plain HTTP.

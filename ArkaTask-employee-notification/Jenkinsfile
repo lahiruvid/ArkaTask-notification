@@ -1,5 +1,6 @@
 // OCI pipeline. The GitHub workflow seeds this job and triggers it.
-// Images are built on this ARM host. OCIR is optional.
+// Builds the four Java images on this ARM host. Nginx is the stock image.
+// The web UI is on Cloudflare, and Postgres is Supabase. OCIR is optional.
 
 pipeline {
   agent any

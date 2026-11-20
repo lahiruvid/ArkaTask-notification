@@ -1,46 +1,102 @@
 package com.arkatasks.login;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Links a Supabase Auth user id (the token's sub) to the employee found by the phone check.
- * This is not a token store: tokens are self-contained and never saved. Rows expire after 12 hours,
- * the same lifetime the old service-signed token had, so employees sign in again each day.
+ * Employee session for this process, also written to the shared volume so
+ * clean-event-service can read it. Not a database table and not a token store.
  */
 @Component
 public class EmployeeIdentityStore {
   public record Employee(String employeeId, String name, String phone) {}
 
-  private final JdbcTemplate jdbc;
+  private record Session(String employeeId, String name, String phone, long expiresAt) {}
 
-  public EmployeeIdentityStore(JdbcTemplate jdbc) {
-    this.jdbc = jdbc;
-    jdbc.execute(
-        "create table if not exists employee_login ("
-            + "auth_uid text primary key, employee_id text not null, name text not null default '', "
-            + "phone text not null default '', created_at timestamptz not null default now())");
+  private final Path file;
+  private final ObjectMapper json;
+  private final Map<String, Session> memory = new LinkedHashMap<>();
+
+  public EmployeeIdentityStore(
+      @Value("${app.session-file:/var/lib/arkatasks/employee-sessions.json}") String path,
+      ObjectMapper json) {
+    this.file = Path.of(path);
+    this.json = json;
   }
 
-  public void save(String authUid, String employeeId, String name, String phone) {
+  public synchronized void save(String authUid, String employeeId, String name, String phone) {
+    if (authUid == null || authUid.isBlank()) return;
     forgetExpired();
-    jdbc.update(
-        "insert into employee_login (auth_uid, employee_id, name, phone) values (?, ?, ?, ?) "
-            + "on conflict (auth_uid) do update set employee_id = excluded.employee_id, "
-            + "name = excluded.name, phone = excluded.phone, created_at = now()",
-        authUid, employeeId, name == null ? "" : name, phone == null ? "" : phone);
+    memory.put(authUid, new Session(
+        employeeId,
+        name == null ? "" : name,
+        phone == null ? "" : phone,
+        Instant.now().plusSeconds(12 * 3600).toEpochMilli()));
+    write();
   }
 
-  public Employee find(String authUid) {
+  public synchronized Employee find(String authUid) {
     if (authUid == null || authUid.isBlank()) return null;
+    load();
     forgetExpired();
-    return jdbc.query(
-        "select employee_id, name, phone from employee_login where auth_uid = ?",
-        rs -> rs.next() ? new Employee(rs.getString(1), rs.getString(2), rs.getString(3)) : null,
-        authUid);
+    Session session = memory.get(authUid);
+    return session == null ? null : new Employee(session.employeeId, session.name, session.phone);
+  }
+
+  private static String text(Object value) {
+    return value == null ? "" : String.valueOf(value);
   }
 
   private void forgetExpired() {
-    jdbc.update("delete from employee_login where created_at < now() - interval '12 hours'");
+    long now = Instant.now().toEpochMilli();
+    memory.entrySet().removeIf(entry -> entry.getValue().expiresAt <= now);
+  }
+
+  private void load() {
+    try {
+      if (!Files.isRegularFile(file)) return;
+      Map<?, ?> raw = json.readValue(Files.readString(file), Map.class);
+      memory.clear();
+      for (Map.Entry<?, ?> entry : raw.entrySet()) {
+        if (!(entry.getValue() instanceof Map<?, ?> row)) continue;
+        Object expires = row.get("expiresAt");
+        memory.put(String.valueOf(entry.getKey()), new Session(
+            text(row.get("employeeId")),
+            text(row.get("name")),
+            text(row.get("phone")),
+            expires instanceof Number n ? n.longValue() : 0L));
+      }
+    } catch (Exception ignored) {
+      // A missing or unreadable session file just means there is no session yet.
+    }
+  }
+
+  private void write() {
+    try {
+      Path dir = file.toAbsolutePath().getParent();
+      if (dir != null) Files.createDirectories(dir);
+      Map<String, Map<String, Object>> body = new LinkedHashMap<>();
+      for (Map.Entry<String, Session> entry : memory.entrySet()) {
+        Session session = entry.getValue();
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("employeeId", session.employeeId);
+        row.put("name", session.name);
+        row.put("phone", session.phone);
+        row.put("expiresAt", session.expiresAt);
+        body.put(entry.getKey(), row);
+      }
+      Path tmp = Files.createTempFile(dir == null ? Path.of(".") : dir, ".sessions", ".tmp");
+      Files.writeString(tmp, json.writeValueAsString(body));
+      Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    } catch (Exception ex) {
+      throw new IllegalStateException("Could not store the employee session.");
+    }
   }
 }

@@ -1,20 +1,7 @@
-# Container limits sum to about 5 GB. Jenkins (768 MB heap) and Ubuntu fit in the 12 GB A1 VM.
+# Container limits sum to about 3.9 GB after dropping Postgres. Jenkins (~1 GB) still fits in 12 GB.
 name: arkatasks
 
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    mem_limit: 1g
-    pull_policy: if_not_present
-    environment:
-      POSTGRES_USER: arkatasks
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-arkatasks}
-      POSTGRES_DB: arkatasks
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./supabase/clean_outbox.sql:/docker-entrypoint-initdb.d/01-outbox.sql:ro
-
   kafka:
     image: bitnamilegacy/kafka:3.7.0
     restart: unless-stopped
@@ -62,18 +49,15 @@ services:
     restart: unless-stopped
     mem_limit: 640m
     environment:
-      SUPABASE_DB_URL: jdbc:postgresql://db:5432/arkatasks
-      SUPABASE_DB_USER: arkatasks
-      SUPABASE_DB_PASSWORD: ${DB_PASSWORD:-arkatasks}
-      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL=https://<project-ref>.supabase.co in .env or the environment}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_ALLOW_MISSING_CONFIG: "true"
       SUPABASE_KEYS_FILE: /var/lib/arkatasks/supabase-keys.json
       APP_TIMEZONE: Europe/Rome
       JAVA_TOOL_OPTIONS: "-Xmx384m"
     volumes:
       - supabase-runtime:/var/lib/arkatasks
     depends_on:
-      db:
-        condition: service_started
       eureka:
         condition: service_started
     ports:
@@ -84,10 +68,9 @@ services:
     restart: unless-stopped
     mem_limit: 640m
     environment:
-      SUPABASE_DB_URL: jdbc:postgresql://db:5432/arkatasks
-      SUPABASE_DB_USER: arkatasks
-      SUPABASE_DB_PASSWORD: ${DB_PASSWORD:-arkatasks}
-      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL=https://<project-ref>.supabase.co in .env or the environment}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_ALLOW_MISSING_CONFIG: "true"
       SUPABASE_KEYS_FILE: /var/lib/arkatasks/supabase-keys.json
       KAFKA_BOOTSTRAP: kafka:9092
       RABBIT_HOST: rabbitmq
@@ -96,8 +79,6 @@ services:
     volumes:
       - supabase-runtime:/var/lib/arkatasks
     depends_on:
-      db:
-        condition: service_started
       kafka:
         condition: service_started
       rabbitmq:
@@ -121,9 +102,8 @@ services:
         condition: service_started
 
   nginx:
-    build:
-      context: ..
-      dockerfile: ArkaTask-employee-notification/Dockerfile.frontend
+    image: nginx:1.27-alpine
+    pull_policy: if_not_present
     restart: unless-stopped
     mem_limit: 128m
     entrypoint: ["/bin/sh", "-c"]
@@ -149,8 +129,7 @@ services:
       - "443:443"
 
 volumes:
-  # Holds supabase-keys.json (Supabase URL + anon key, mode 600). Shared by login and clean-event.
+  # supabase-keys.json (URL + anon key) and employee-sessions.json. Shared by login and clean-event.
   supabase-runtime:
-  pgdata:
   kafkadata:
   nginxcerts:

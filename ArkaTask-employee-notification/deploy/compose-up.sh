@@ -33,28 +33,12 @@ fi
 export REGISTRY
 python3 deploy/envfile.py REGISTRY "$REGISTRY"
 
+# Project URL and anon key stay empty until POST /api/login. Do not require them here.
 if [ -n "${SUPABASE_URL:-}" ]; then
   python3 deploy/envfile.py SUPABASE_URL "${SUPABASE_URL%/}"
 fi
-if [ -n "${DB_PASSWORD:-}" ]; then
-  python3 deploy/envfile.py DB_PASSWORD "$DB_PASSWORD"
-fi
-
-if ! python3 - <<'PY'
-import pathlib, sys
-path = pathlib.Path(".env")
-text = path.read_text() if path.exists() else ""
-value = ""
-for line in text.splitlines():
-    if line.startswith("SUPABASE_URL="):
-        value = line.split("=", 1)[1].strip().strip('"').strip("'")
-        break
-sys.exit(0 if value.startswith("https://") and " " not in value else 1)
-PY
-then
-  echo "ERROR: SUPABASE_URL is not set. Export SUPABASE_URL=https://<project-ref>.supabase.co or add it to .env." >&2
-  echo "login-service and clean-event-service refuse to start without it." >&2
-  exit 1
+if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+  python3 deploy/envfile.py SUPABASE_ANON_KEY "$SUPABASE_ANON_KEY"
 fi
 
 if getent group jenkins >/dev/null 2>&1; then

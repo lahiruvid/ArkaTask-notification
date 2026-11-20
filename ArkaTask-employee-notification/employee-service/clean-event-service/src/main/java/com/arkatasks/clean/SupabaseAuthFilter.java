@@ -21,9 +21,15 @@ public class SupabaseAuthFilter extends OncePerRequestFilter {
   private static final Logger log = LoggerFactory.getLogger(SupabaseAuthFilter.class);
 
   private final SupabaseJwtVerifier verifier;
+  private final SupabaseKeysFile keys;
 
   public SupabaseAuthFilter(SupabaseJwtVerifier verifier) {
+    this(verifier, null);
+  }
+
+  public SupabaseAuthFilter(SupabaseJwtVerifier verifier, SupabaseKeysFile keys) {
     this.verifier = verifier;
+    this.keys = keys;
   }
 
   @Override
@@ -32,6 +38,20 @@ public class SupabaseAuthFilter extends OncePerRequestFilter {
     if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
       chain.doFilter(request, response);
       return;
+    }
+    if (!verifier.ready() && keys != null) {
+      SupabaseKeysFile.Creds saved = keys.read();
+      if (saved != null) {
+        try {
+          verifier.adoptProject(saved.url());
+        } catch (SupabaseJwtVerifier.AuthException ex) {
+          log.info("Rejected {} {}: HTTP {} {}", request.getMethod(), request.getRequestURI(), ex.status(), ex.getMessage());
+          response.setStatus(ex.status());
+          response.setContentType("application/json");
+          response.getWriter().write("{\"error\":\"" + ex.getMessage().replace("\"", "'") + "\"}");
+          return;
+        }
+      }
     }
     Claims claims;
     try {

@@ -62,8 +62,9 @@ public class SupabaseAuthConfig {
   }
 
   @Bean
-  FilterRegistrationBean<SupabaseAuthFilter> supabaseAuthFilter(SupabaseJwtVerifier verifier) {
-    FilterRegistrationBean<SupabaseAuthFilter> reg = new FilterRegistrationBean<>(new SupabaseAuthFilter(verifier));
+  FilterRegistrationBean<SupabaseAuthFilter> supabaseAuthFilter(
+      SupabaseJwtVerifier verifier, SupabaseKeysFile keys) {
+    FilterRegistrationBean<SupabaseAuthFilter> reg = new FilterRegistrationBean<>(new SupabaseAuthFilter(verifier, keys));
     reg.addUrlPatterns(PROTECTED_PATHS);
     reg.setOrder(1);
     return reg;

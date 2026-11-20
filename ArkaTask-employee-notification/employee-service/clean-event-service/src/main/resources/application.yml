@@ -3,10 +3,15 @@ server:
 spring:
   application:
     name: clean-event-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
   datasource:
-    url: ${SUPABASE_DB_URL:jdbc:postgresql://db:5432/arkatasks}
-    username: ${SUPABASE_DB_USER:arkatasks}
-    password: ${SUPABASE_DB_PASSWORD:arkatasks}
+    url: ${SUPABASE_DB_URL:}
+    username: ${SUPABASE_DB_USER:}
+    password: ${SUPABASE_DB_PASSWORD:}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
   rabbitmq:
@@ -18,6 +23,8 @@ app:
 supabase:
   # Project URL, e.g. https://<project-ref>.supabase.co . JWKS URL and issuer are derived from it.
   url: ${SUPABASE_URL:}
+  anon-key: ${SUPABASE_ANON_KEY:}
+  allow-missing-config: ${SUPABASE_ALLOW_MISSING_CONFIG:true}
   jwks-url: ${SUPABASE_JWKS_URL:}
   issuer: ${SUPABASE_JWT_ISSUER:}
   audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
@@ -45,7 +52,7 @@ management:
   health:
     group:
       readiness:
-        include: db,diskSpace
+        include: diskSpace
 resilience4j:
   retry:
     instances:

@@ -5,7 +5,11 @@ import io.jsonwebtoken.JwsHeader;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.LocatorAdapter;
 import io.jsonwebtoken.security.SecurityException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
 import java.security.Key;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Date;
 import java.util.Set;
 
@@ -30,8 +34,8 @@ public class SupabaseJwtVerifier {
     }
   }
 
-  private final SupabaseJwks jwks;
-  private final String issuer;
+  private volatile SupabaseJwks jwks;
+  private volatile String issuer;
   private final String audience;
   private final Set<String> allowedAlgs;
   private final long clockSkewSeconds;
@@ -48,6 +52,32 @@ public class SupabaseJwtVerifier {
         throw new IllegalArgumentException("Only asymmetric algorithms are allowed, not " + alg);
       }
     }
+  }
+
+  public boolean ready() {
+    SupabaseJwks current = jwks;
+    return current != null && current.isLoaded();
+  }
+
+  /** Loads JWKS for a project URL already stored by login-service. */
+  public synchronized void adoptProject(String projectUrl) {
+    String base = SupabaseKeysFile.normalizeUrl(projectUrl);
+    if (!base.regionMatches(true, 0, "https://", 0, 8) || !base.toLowerCase().endsWith(".supabase.co")) {
+      throw new AuthException(400, "Supabase project URL must be https://<project-ref>.supabase.co");
+    }
+    String iss = base + "/auth/v1";
+    if (iss.equals(issuer) && jwks != null) {
+      return;
+    }
+    SupabaseJwks cache = new SupabaseJwks(
+        URI.create(iss + "/.well-known/jwks.json"),
+        SupabaseJwks.httpsFetcher(),
+        new ObjectMapper(),
+        Duration.ofSeconds(60),
+        Clock.systemUTC());
+    cache.loadAtStartup(2, Duration.ofSeconds(1), Duration.ofSeconds(2));
+    this.jwks = cache;
+    this.issuer = iss;
   }
 
   /** @param authorization the raw Authorization header value */

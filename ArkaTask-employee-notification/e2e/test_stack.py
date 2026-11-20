@@ -11,7 +11,6 @@ Env:
 
 import json
 import os
-import re
 import time
 import unittest
 import urllib.error
@@ -70,31 +69,14 @@ class StackTests(unittest.TestCase):
     def setUpClass(cls):
         wait_for_login()
 
-    def test_01_nginx_page_loads(self):
-        status, headers, raw = request("GET", BASE + "/")
+    def test_01_login_health_through_nginx(self):
+        status, _, raw = request("GET", BASE + "/actuator/health")
         self.assertEqual(status, 200, raw[:300])
-        ctype = headers.get("Content-Type", headers.get("content-type", ""))
-        self.assertIn("text/html", ctype)
-        self.assertIn(b"<html", raw.lower())
+        self.assertIn(b"UP", raw)
 
-    def test_02_frontend_asset_loads(self):
-        status, _, raw = request("GET", BASE + "/")
-        self.assertEqual(status, 200)
-        html = raw.decode("utf-8", "replace")
-        match = re.search(r'(?:src|href)="([^"]+\.(?:js|css))"', html)
-        self.assertIsNotNone(match, "home page did not link a js or css asset")
-        path = match.group(1)
-        if path.startswith("http"):
-            url = path
-        elif path.startswith("/"):
-            url = BASE + path
-        else:
-            url = BASE + "/" + path
-        asset_status, asset_headers, asset = request("GET", url)
-        self.assertEqual(asset_status, 200, path)
-        self.assertGreater(len(asset), 0)
-        ctype = asset_headers.get("Content-Type", "")
-        self.assertTrue("javascript" in ctype or "css" in ctype or "text/" in ctype)
+    def test_02_login_endpoint_is_proxied(self):
+        status, _, raw = request("POST", BASE + "/api/login", {"phone": "0"})
+        self.assertNotIn(status, (502, 503, 504), raw[:300])
 
     def test_08_zipkin_health(self):
         status, _, raw = request("GET", ZIPKIN + "/health")

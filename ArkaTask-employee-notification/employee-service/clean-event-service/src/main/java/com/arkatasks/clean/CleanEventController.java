@@ -9,14 +9,20 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,7 +40,13 @@ public class CleanEventController {
   private final ZoneId zone;
   private final OwnerNotifierClient ownerNotifier;
   private final EmployeeIdentityStore identities;
+  private final SupabaseKeysFile keys;
+  private final HttpClient http = HttpClient.newBuilder()
+      .connectTimeout(Duration.ofSeconds(5))
+      .followRedirects(HttpClient.Redirect.NEVER)
+      .build();
 
+  /** Tests pass a JDBC mock. Production has no DataSource, so jdbc is null. */
   public CleanEventController(
       JdbcTemplate jdbc,
       KafkaTemplate<String, String> kafka,
@@ -43,6 +55,31 @@ public class CleanEventController {
       @Value("${app.timezone:Europe/Rome}") String timezone,
       OwnerNotifierClient ownerNotifier,
       EmployeeIdentityStore identities) {
+    this(jdbc, kafka, rabbit, json, timezone, ownerNotifier, identities, null);
+  }
+
+  @Autowired
+  public CleanEventController(
+      ObjectProvider<JdbcTemplate> jdbc,
+      KafkaTemplate<String, String> kafka,
+      RabbitTemplate rabbit,
+      ObjectMapper json,
+      @Value("${app.timezone:Europe/Rome}") String timezone,
+      OwnerNotifierClient ownerNotifier,
+      EmployeeIdentityStore identities,
+      SupabaseKeysFile keys) {
+    this(jdbc.getIfAvailable(), kafka, rabbit, json, timezone, ownerNotifier, identities, keys);
+  }
+
+  private CleanEventController(
+      JdbcTemplate jdbc,
+      KafkaTemplate<String, String> kafka,
+      RabbitTemplate rabbit,
+      ObjectMapper json,
+      String timezone,
+      OwnerNotifierClient ownerNotifier,
+      EmployeeIdentityStore identities,
+      SupabaseKeysFile keys) {
     this.jdbc = jdbc;
     this.kafka = kafka;
     this.rabbit = rabbit;
@@ -50,6 +87,7 @@ public class CleanEventController {
     this.zone = ZoneId.of(timezone);
     this.ownerNotifier = ownerNotifier;
     this.identities = identities;
+    this.keys = keys;
   }
 
   @PostMapping("/api/employee-logins")
@@ -62,7 +100,6 @@ public class CleanEventController {
   }
 
   @PostMapping("/api/cleans")
-  @Transactional
   public Map<String, Object> markClean(
       HttpServletRequest request,
       @RequestBody Map<String, String> body) throws Exception {
@@ -85,6 +122,15 @@ public class CleanEventController {
     }
     String apartmentName = lookupName(apartmentId, date, employeeId);
     String time = LocalTime.now(zone).format(DateTimeFormatter.ofPattern("HH:mm"));
+    if (jdbc == null) {
+      Map<String, Object> event = event(apartmentId, apartmentName, date, time, employeeId, employeeName, employeePhone);
+      kafka.send(TOPIC, employeeId + ":" + apartmentId + ":" + date, json.writeValueAsString(event));
+      return Map.of(
+          "status", "accepted",
+          "outbox", "skipped",
+          "apartmentId", apartmentId,
+          "date", date);
+    }
     int inserted = jdbc.update(
         "insert into clean_outbox (apartment_id, date, employee_id, employee_name, employee_phone, apartment_name, clean_time, status) "
             + "values (?, ?::date, ?, ?, ?, ?, ?, 'PENDING') on conflict do nothing",
@@ -99,8 +145,10 @@ public class CleanEventController {
   }
 
   @Scheduled(fixedDelay = 5000)
-  @Transactional
   public void relayPending() throws Exception {
+    if (jdbc == null) {
+      return;
+    }
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select apartment_id, date::text as date, employee_id, employee_name, employee_phone, apartment_name, clean_time "
             + "from clean_outbox where status = 'PENDING' order by created_at limit 20 for update skip locked");
@@ -124,11 +172,52 @@ public class CleanEventController {
   }
 
   private String lookupName(String apartmentId, String date, String employeeId) throws Exception {
+    if (jdbc == null) {
+      return lookupNameFromSupabase(apartmentId, date, employeeId);
+    }
     String payload = jdbc.query(
         "select payload::text from app_state where id = 'main'",
         rs -> rs.next() ? rs.getString(1) : null);
     if (payload == null) return apartmentId;
     var jobs = json.readTree(payload).path("jobs");
+    if (!jobs.isArray()) return apartmentId;
+    for (var job : jobs) {
+      if (!apartmentId.equals(job.path("property_id").asText())) continue;
+      if (!date.equals(job.path("date").asText())) continue;
+      for (var assignment : job.path("job_assignments")) {
+        if (employeeId.equals(assignment.path("employee_id").asText())) {
+          String name = job.path("place_name").asText("").trim();
+          return name.isEmpty() ? apartmentId : name;
+        }
+      }
+    }
+    return apartmentId;
+  }
+
+  /** app_state via PostgREST using the URL and anon key login-service saved. The key is not logged. */
+  private String lookupNameFromSupabase(String apartmentId, String date, String employeeId) throws Exception {
+    if (keys == null) return apartmentId;
+    SupabaseKeysFile.Creds creds = keys.read();
+    if (creds == null) return apartmentId;
+    SupabaseKeysFile.requirePublicKey(creds.anonKey());
+    URI uri = URI.create(SupabaseKeysFile.normalizeUrl(creds.url()) + "/rest/v1/app_state?id=eq.main&select=payload");
+    HttpRequest request = HttpRequest.newBuilder(uri)
+        .timeout(Duration.ofSeconds(10))
+        .header("apikey", creds.anonKey())
+        .header("Authorization", "Bearer " + creds.anonKey())
+        .header("Accept", "application/json")
+        .GET()
+        .build();
+    HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() != 200 || response.body() == null || response.body().isBlank()) {
+      return apartmentId;
+    }
+    var root = json.readTree(response.body());
+    var row = root.isArray() && !root.isEmpty() ? root.get(0) : root;
+    var jobs = row.path("payload").path("jobs");
+    if (row.path("payload").isTextual()) {
+      jobs = json.readTree(row.path("payload").asText()).path("jobs");
+    }
     if (!jobs.isArray()) return apartmentId;
     for (var job : jobs) {
       if (!apartmentId.equals(job.path("property_id").asText())) continue;

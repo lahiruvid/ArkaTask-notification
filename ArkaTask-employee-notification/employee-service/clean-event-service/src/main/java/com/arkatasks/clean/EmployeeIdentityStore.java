@@ -1,46 +1,50 @@
 package com.arkatasks.clean;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Links a Supabase Auth user id (the token's sub) to the employee found by the phone check.
- * This is not a token store: tokens are self-contained and never saved. Rows expire after 12 hours,
- * the same lifetime the old service-signed token had, so employees sign in again each day.
+ * Reads the employee session login-service wrote on the shared volume.
+ * This process does not open JDBC.
  */
 @Component
 public class EmployeeIdentityStore {
   public record Employee(String employeeId, String name, String phone) {}
 
-  private final JdbcTemplate jdbc;
+  private final Path file;
+  private final ObjectMapper json;
 
-  public EmployeeIdentityStore(JdbcTemplate jdbc) {
-    this.jdbc = jdbc;
-    jdbc.execute(
-        "create table if not exists employee_login ("
-            + "auth_uid text primary key, employee_id text not null, name text not null default '', "
-            + "phone text not null default '', created_at timestamptz not null default now())");
+  public EmployeeIdentityStore(
+      @Value("${app.session-file:/var/lib/arkatasks/employee-sessions.json}") String path,
+      ObjectMapper json) {
+    this.file = Path.of(path);
+    this.json = json;
   }
 
-  public void save(String authUid, String employeeId, String name, String phone) {
-    forgetExpired();
-    jdbc.update(
-        "insert into employee_login (auth_uid, employee_id, name, phone) values (?, ?, ?, ?) "
-            + "on conflict (auth_uid) do update set employee_id = excluded.employee_id, "
-            + "name = excluded.name, phone = excluded.phone, created_at = now()",
-        authUid, employeeId, name == null ? "" : name, phone == null ? "" : phone);
+  private static String text(Object value) {
+    return value == null ? "" : String.valueOf(value);
   }
 
   public Employee find(String authUid) {
-    if (authUid == null || authUid.isBlank()) return null;
-    forgetExpired();
-    return jdbc.query(
-        "select employee_id, name, phone from employee_login where auth_uid = ?",
-        rs -> rs.next() ? new Employee(rs.getString(1), rs.getString(2), rs.getString(3)) : null,
-        authUid);
-  }
-
-  private void forgetExpired() {
-    jdbc.update("delete from employee_login where created_at < now() - interval '12 hours'");
+    if (authUid == null || authUid.isBlank() || !Files.isRegularFile(file)) return null;
+    try {
+      Map<?, ?> raw = json.readValue(Files.readString(file), Map.class);
+      Object row = raw.get(authUid);
+      if (!(row instanceof Map<?, ?> session)) return null;
+      Object expires = session.get("expiresAt");
+      long expiry = expires instanceof Number n ? n.longValue() : 0L;
+      if (expiry <= Instant.now().toEpochMilli()) return null;
+      return new Employee(
+          text(session.get("employeeId")),
+          text(session.get("name")),
+          text(session.get("phone")));
+    } catch (Exception ignored) {
+      return null;
+    }
   }
 }

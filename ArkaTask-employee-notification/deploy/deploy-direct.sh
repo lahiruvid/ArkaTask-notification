@@ -1,5 +1,6 @@
 #!/bin/bash
-# Fallback when Jenkins is down: build linux/arm64 images and start compose.
+# Fallback when Jenkins is down: build the four linux/arm64 Java images and start compose.
+# Does not build the frontend or start a Postgres container.
 # Run from anywhere on the VM:
 #   cd /opt/arkatasks/ArkaTask-employee-notification
 #   bash deploy/deploy-direct.sh
