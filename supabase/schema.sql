@@ -194,10 +194,12 @@ CREATE POLICY "anon_insert_app_full_backups" ON app_full_backups
 CREATE POLICY "anon_delete_app_full_backups" ON app_full_backups
   FOR DELETE TO anon USING (true);
 
--- Clean-tap outbox for the employee notification services.
--- One row per apartment, per day, per employee. The clean-event-service
--- inserts this in the same transaction as the tap, then a scheduled relay
--- publishes rows that are still PENDING to RabbitMQ.
+-- Clean-tap outbox for the employee notification services (Oracle backend).
+-- Flow: clean-event-service puts each tap on Kafka, a Kafka listener inserts it
+-- here as PENDING (duplicates ignored), and a relay publishes PENDING rows to
+-- RabbitMQ for owner-notifier, then sets status = RELAYED.
+-- The backend uses the public anon key only, so anon needs SELECT, INSERT and
+-- UPDATE. There is no DELETE policy.
 --
 -- Query assumptions for login-service (not this table):
 --   Employees and jobs live in app_state.payload (id = 'main').
@@ -219,6 +221,24 @@ CREATE TABLE IF NOT EXISTS clean_outbox (
   relayed_at TIMESTAMPTZ,
   PRIMARY KEY (apartment_id, date, employee_id)
 );
+
+CREATE INDEX IF NOT EXISTS clean_outbox_pending_idx
+  ON clean_outbox (created_at) WHERE status = 'PENDING';
+
+ALTER TABLE clean_outbox ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE ON clean_outbox TO anon;
+
+DROP POLICY IF EXISTS "anon_select_clean_outbox" ON clean_outbox;
+DROP POLICY IF EXISTS "anon_insert_clean_outbox" ON clean_outbox;
+DROP POLICY IF EXISTS "anon_update_clean_outbox" ON clean_outbox;
+
+CREATE POLICY "anon_select_clean_outbox" ON clean_outbox
+  FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_insert_clean_outbox" ON clean_outbox
+  FOR INSERT TO anon WITH CHECK (status = 'PENDING');
+CREATE POLICY "anon_update_clean_outbox" ON clean_outbox
+  FOR UPDATE TO anon USING (status = 'PENDING') WITH CHECK (status IN ('PENDING', 'RELAYED'));
 
 -- Optional maintenance (run manually if history grows large on free DB):
 -- DELETE FROM app_state_history
