@@ -69,7 +69,7 @@ resource "oci_core_security_list" "public" {
   }
 
   egress_security_rules {
-    description = "Outbound for apt, Docker Hub, and OCIR"
+    description = "Outbound for apt, GitHub, and Docker Hub"
     protocol    = "all"
     destination = "0.0.0.0/0"
     stateless   = false
@@ -131,6 +131,6 @@ resource "oci_core_network_security_group_security_rule" "egress" {
   protocol                  = "all"
   destination               = "0.0.0.0/0"
   destination_type          = "CIDR_BLOCK"
-  description               = "Outbound for apt, Docker Hub, and OCIR"
+  description               = "Outbound for apt, GitHub, and Docker Hub"
   stateless                 = false
 }
