@@ -1,3 +1,11 @@
+# QA log
+
+## 20 November 2026: login rate limit restored
+
+- The per-phone limit in `PhoneLoginLimiter` is on again: 10 attempts per phone per 15 minutes, with at most 10,000 phones tracked. Nginx adds 10 logins per minute per IP (burst 5).
+- The commented-out `@RateLimiter` on `POST /api/login` and its 100000-per-second config were removed.
+- A tester who hits HTTP 429 waits 15 minutes or restarts login-service (the limit is in memory).
+
 # QA log — 19 November 2026
 
 ## Login rate limits disabled for testing

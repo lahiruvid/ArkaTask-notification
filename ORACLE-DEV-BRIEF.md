@@ -145,3 +145,14 @@ The four secrets that already exist as the placeholder `pending` are called out 
 - App images are `local/arkatasks-employee-notification:<service>` or OCIR (`deploy/jenkins-build.sh` logs in to `<region-key>.ocir.io`). `deploy/compose-up.sh` still accepts `ECR_REGISTRY`. `deploy/build-and-push.sh` and the nested `ArkaTask-employee-notification/.github/workflows/deploy.yml` still target Amazon ECR. The Oracle path must push to and pull from Docker Hub instead. Do not revive ECR or OCIR for this branch.
 - There is no `GH_TOKEN`, `DOCKERHUB_USERNAME`, or `DOCKERHUB_TOKEN` reference yet, and nothing fails when a secret is still `pending`.
 - Container memory limits add up to about 3.9 GB, not 4.6 GB. That is under the task 6 figure because the Postgres container is gone. Sonar should keep the sum at or under about 4.6 GB.
+
+### Status of the conflicts (20 Nov 2026)
+
+All four are resolved on `deploy-oci`:
+
+- Deploy SSH uses `SSH_PRIVATE_KEY`; the workflow checks that `OCI_SSH_PUBLIC_KEY` is its public half.
+- ECR and OCIR are gone. Jenkins builds `linux/arm64` images and pushes `docker.io/<DOCKERHUB_USERNAME>/arkatasks-employee-notification:<service>`; Compose pulls them (`docker-compose.registry.yml`).
+- `GH_TOKEN`, `DOCKERHUB_USERNAME`, and `DOCKERHUB_TOKEN` are wired in, and the first workflow job fails when any required secret is missing or `pending`.
+- Container limits add up to about 3.6 GB with JVM heap caps, restart policies, and 4 GB swap. The target order of task 15 (Kafka first, then the Supabase outbox, then RabbitMQ) is implemented in clean-event-service.
+
+Details and the remaining manual steps: `ArkaTask-employee-notification/terraform-oci/README.md`.
