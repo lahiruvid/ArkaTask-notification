@@ -1,29 +1,66 @@
+// OCI pipeline. The GitHub workflow seeds this job and triggers it.
+// Images are built on this ARM host. OCIR is optional.
+
 pipeline {
   agent any
+  options {
+    timeout(time: 150, unit: 'MINUTES')
+    disableConcurrentBuilds()
+  }
   environment {
-    AWS_REGION = 'eu-west-3'
-    ECR_REGISTRY = '034115073932.dkr.ecr.eu-west-3.amazonaws.com'
-    ECR_REPO = 'arkatasks-employee-notification'
+    APP_DIR = '/opt/arkatasks/ArkaTask-employee-notification'
   }
   stages {
-    stage('Build frontend') {
+    stage('Build ARM images') {
       steps {
-        sh 'bash deploy/build-frontend.sh'
-      }
-    }
-    stage('Build and push images') {
-      steps {
-        sh 'SKIP_FRONTEND=1 bash deploy/build-and-push.sh'
+        script {
+          def ids = ['ocir-region-key', 'ocir-namespace', 'ocir-username', 'ocir-auth-token']
+          def haveCreds = false
+          try {
+            def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
+              com.cloudbees.plugins.credentials.Credentials.class,
+              jenkins.model.Jenkins.instance,
+              null,
+              java.util.Collections.emptyList()
+            )
+            def present = creds.collect { it.id } as Set
+            haveCreds = ids.every { present.contains(it) }
+          } catch (Throwable ignored) {
+            haveCreds = false
+          }
+          if (haveCreds) {
+            withCredentials([
+              string(credentialsId: 'ocir-region-key', variable: 'OCIR_REGION_KEY'),
+              string(credentialsId: 'ocir-namespace', variable: 'OCIR_NAMESPACE'),
+              string(credentialsId: 'ocir-username', variable: 'OCIR_USERNAME'),
+              string(credentialsId: 'ocir-auth-token', variable: 'OCIR_AUTH_TOKEN'),
+            ]) {
+              sh 'bash "$APP_DIR/deploy/jenkins-build.sh"'
+            }
+          } else {
+            sh 'bash "$APP_DIR/deploy/jenkins-build.sh"'
+          }
+        }
       }
     }
     stage('Compose up') {
       steps {
-        sh 'bash deploy/compose-up.sh'
+        sh 'bash "$APP_DIR/deploy/compose-up.sh"'
+      }
+    }
+    stage('Seed Supabase anon key') {
+      steps {
+        sh 'bash "$APP_DIR/deploy/seed-anon-key.sh"'
+      }
+    }
+    stage('Health') {
+      steps {
+        sh 'bash "$APP_DIR/deploy/health-check.sh"'
       }
     }
     stage('E2E') {
       steps {
-        sh 'E2E_BASE_URL=http://127.0.0.1:8880 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 e2e/test_stack.py'
+        sh 'cd "$APP_DIR" && E2E_BASE_URL=http://127.0.0.1:80 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 e2e/test_stack.py'
       }
     }
   }

@@ -1,0 +1,15 @@
+# Copy to backend.hcl (gitignored) and pass it only on your laptop:
+#   terraform init -backend-config=backend.hcl
+# GitHub Actions passes the same keys with -backend-config flags.
+# Do not commit real values. Create the bucket once in the console first.
+
+bucket    = "arkatasks-tfstate"
+namespace = "<tenancy object storage namespace>"
+region    = "<home region, for example eu-frankfurt-1>"
+
+# API key auth. Prefer a 600 key file over pasting the PEM here.
+auth             = "APIKey"
+tenancy_ocid     = "<tenancy ocid>"
+user_ocid        = "<user ocid>"
+fingerprint      = "<api key fingerprint>"
+private_key_path = "<path to the PEM, mode 600>"

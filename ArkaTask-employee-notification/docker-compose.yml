@@ -1,18 +1,25 @@
+# Container limits sum to about 5 GB. Jenkins (768 MB heap) and Ubuntu fit in the 12 GB A1 VM.
+name: arkatasks
+
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 1g
+    pull_policy: if_not_present
     environment:
       POSTGRES_USER: arkatasks
-      POSTGRES_PASSWORD: arkatasks
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-arkatasks}
       POSTGRES_DB: arkatasks
     volumes:
+      - pgdata:/var/lib/postgresql/data
       - ./supabase/clean_outbox.sql:/docker-entrypoint-initdb.d/01-outbox.sql:ro
-    ports:
-      - "5432:5432"
 
   kafka:
     image: bitnamilegacy/kafka:3.7.0
     restart: unless-stopped
+    mem_limit: 768m
+    pull_policy: if_not_present
     environment:
       KAFKA_CFG_NODE_ID: 0
       KAFKA_CFG_PROCESS_ROLES: controller,broker
@@ -23,40 +30,45 @@ services:
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
       ALLOW_PLAINTEXT_LISTENER: "yes"
-      KAFKA_HEAP_OPTS: "-Xmx256m -Xms256m"
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+    volumes:
+      - kafkadata:/bitnami/kafka
 
   rabbitmq:
     image: rabbitmq:3-alpine
-    ports:
-      - "5672:5672"
+    restart: unless-stopped
+    mem_limit: 512m
+    pull_policy: if_not_present
 
   zipkin:
     image: openzipkin/zipkin:3
     restart: unless-stopped
+    mem_limit: 384m
+    pull_policy: if_not_present
     environment:
       JAVA_OPTS: "-Xmx128m -XX:+ExitOnOutOfMemoryError"
     ports:
-      - "9411:9411"
+      - "127.0.0.1:9411:9411"
 
   eureka:
     build: ./employee-service/eureka-server
     restart: unless-stopped
+    mem_limit: 384m
     environment:
       JAVA_TOOL_OPTIONS: "-Xmx192m"
-    ports:
-      - "8761:8761"
 
   login-service:
     build: ./employee-service/login-service
     restart: unless-stopped
+    mem_limit: 640m
     environment:
       SUPABASE_DB_URL: jdbc:postgresql://db:5432/arkatasks
       SUPABASE_DB_USER: arkatasks
-      SUPABASE_DB_PASSWORD: arkatasks
+      SUPABASE_DB_PASSWORD: ${DB_PASSWORD:-arkatasks}
       SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL=https://<project-ref>.supabase.co in .env or the environment}
       SUPABASE_KEYS_FILE: /var/lib/arkatasks/supabase-keys.json
       APP_TIMEZONE: Europe/Rome
-      JAVA_TOOL_OPTIONS: "-Xmx256m"
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
     volumes:
       - supabase-runtime:/var/lib/arkatasks
     depends_on:
@@ -70,16 +82,17 @@ services:
   clean-event-service:
     build: ./employee-service/clean-event-service
     restart: unless-stopped
+    mem_limit: 640m
     environment:
       SUPABASE_DB_URL: jdbc:postgresql://db:5432/arkatasks
       SUPABASE_DB_USER: arkatasks
-      SUPABASE_DB_PASSWORD: arkatasks
+      SUPABASE_DB_PASSWORD: ${DB_PASSWORD:-arkatasks}
       SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL=https://<project-ref>.supabase.co in .env or the environment}
       SUPABASE_KEYS_FILE: /var/lib/arkatasks/supabase-keys.json
       KAFKA_BOOTSTRAP: kafka:9092
       RABBIT_HOST: rabbitmq
       APP_TIMEZONE: Europe/Rome
-      JAVA_TOOL_OPTIONS: "-Xmx256m"
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
     volumes:
       - supabase-runtime:/var/lib/arkatasks
     depends_on:
@@ -97,6 +110,7 @@ services:
   owner-notifier:
     build: ./owner-notifier
     restart: unless-stopped
+    mem_limit: 512m
     environment:
       RABBIT_HOST: rabbitmq
       JAVA_TOOL_OPTIONS: "-Xmx256m"
@@ -105,14 +119,13 @@ services:
         condition: service_started
       eureka:
         condition: service_started
-    ports:
-      - "8083:8083"
 
   nginx:
     build:
       context: ..
       dockerfile: ArkaTask-employee-notification/Dockerfile.frontend
-    image: arkatasks-nginx:local
+    restart: unless-stopped
+    mem_limit: 128m
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -127,13 +140,17 @@ services:
         exec nginx -g "daemon off;"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginxcerts:/etc/nginx/certs
     depends_on:
       - login-service
       - clean-event-service
     ports:
-      - "8880:80"
-      - "8443:443"
+      - "80:80"
+      - "443:443"
 
 volumes:
   # Holds supabase-keys.json (Supabase URL + anon key, mode 600). Shared by login and clean-event.
   supabase-runtime:
+  pgdata:
+  kafkadata:
+  nginxcerts:

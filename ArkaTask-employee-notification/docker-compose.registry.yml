@@ -1,0 +1,18 @@
+# Image names produced by deploy/build-arm.sh.
+# REGISTRY=local uses images loaded on this host. An OCIR prefix pulls when missing.
+services:
+  eureka:
+    image: ${REGISTRY:-local}/arkatasks-employee-notification:eureka
+    pull_policy: if_not_present
+  login-service:
+    image: ${REGISTRY:-local}/arkatasks-employee-notification:login-service
+    pull_policy: if_not_present
+  clean-event-service:
+    image: ${REGISTRY:-local}/arkatasks-employee-notification:clean-event-service
+    pull_policy: if_not_present
+  owner-notifier:
+    image: ${REGISTRY:-local}/arkatasks-employee-notification:owner-notifier
+    pull_policy: if_not_present
+  nginx:
+    image: ${REGISTRY:-local}/arkatasks-employee-notification:nginx
+    pull_policy: if_not_present

@@ -3,3 +3,12 @@
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+!terraform-oci/.terraform.lock.hcl
+backend.hcl
+tfplan
+*.tfplan
+.ocir.env
+seed/
+
+__pycache__/
+*.pyc

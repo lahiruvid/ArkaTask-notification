@@ -1,0 +1,304 @@
+# Deploy the employee stack to the Oracle VM on deploy-oci.
+# Terraform runs here. Image build and compose run on the VM, inside Jenkins.
+
+name: deploy-oci
+
+on:
+  push:
+    branches:
+      - deploy-oci
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-oci
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Terraform then Jenkins
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      TF_IN_AUTOMATION: "1"
+      TF_INPUT: "0"
+    steps:
+      - name: Require GitHub secrets
+        id: guard
+        env:
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          OCI_SSH_PUBLIC_KEY: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          OCI_SSH_CIDR: ${{ secrets.OCI_SSH_CIDR }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_NAMESPACE: ${{ secrets.TF_STATE_NAMESPACE }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JENKINS_ADMIN_PASSWORD: ${{ secrets.JENKINS_ADMIN_PASSWORD }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          OCI_AVAILABILITY_DOMAIN_INDEX: ${{ secrets.OCI_AVAILABILITY_DOMAIN_INDEX }}
+          OCIR_REGION_KEY: ${{ secrets.OCIR_REGION_KEY }}
+          OCIR_NAMESPACE: ${{ secrets.OCIR_NAMESPACE }}
+          OCIR_USERNAME: ${{ secrets.OCIR_USERNAME }}
+          OCIR_AUTH_TOKEN: ${{ secrets.OCIR_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          required=(
+            OCI_TENANCY_OCID
+            OCI_USER_OCID
+            OCI_FINGERPRINT
+            OCI_PRIVATE_KEY
+            OCI_REGION
+            OCI_COMPARTMENT_OCID
+            OCI_SSH_PUBLIC_KEY
+            OCI_SSH_PRIVATE_KEY
+            OCI_SSH_CIDR
+            TF_STATE_BUCKET
+            TF_STATE_NAMESPACE
+            SUPABASE_URL
+            DB_PASSWORD
+            JENKINS_ADMIN_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
+            echo "Add them under Settings > Secrets and variables > Actions."
+            echo "Names and the one-time state bucket are documented in ArkaTask-employee-notification/terraform-oci/README.md."
+            echo "Stopping before Terraform, image builds, and SSH so this push cannot leave a partial stack."
+            exit 1
+          fi
+          case "$OCI_PRIVATE_KEY" in
+            *"PRIVATE KEY"*) ;;
+            *)
+              echo "::error::OCI_PRIVATE_KEY must be a PEM private key"
+              exit 1
+              ;;
+          esac
+          case "$OCI_SSH_PRIVATE_KEY" in
+            *"PRIVATE KEY"*) ;;
+            *)
+              echo "::error::OCI_SSH_PRIVATE_KEY must be a private key"
+              exit 1
+              ;;
+          esac
+          case "$OCI_SSH_PUBLIC_KEY" in
+            ssh-*|ecdsa-*) ;;
+            *)
+              echo "::error::OCI_SSH_PUBLIC_KEY must be an OpenSSH public key"
+              exit 1
+              ;;
+          esac
+          supabase="${SUPABASE_URL%/}"
+          if ! printf '%s' "$supabase" | grep -Eq '^https://[A-Za-z0-9.-]+$'; then
+            echo "::error::SUPABASE_URL must look like https://<project-ref>.supabase.co"
+            exit 1
+          fi
+          case "$DB_PASSWORD" in
+            *$'\n'*|*$'\r'*)
+              echo "::error::DB_PASSWORD must be a single line"
+              exit 1
+              ;;
+          esac
+          case "$JENKINS_ADMIN_PASSWORD" in
+            *$'\n'*|*$'\r'*)
+              echo "::error::JENKINS_ADMIN_PASSWORD must be a single line"
+              exit 1
+              ;;
+          esac
+          if [ "${#JENKINS_ADMIN_PASSWORD}" -lt 8 ]; then
+            echo "::error::JENKINS_ADMIN_PASSWORD must be at least 8 characters"
+            exit 1
+          fi
+          if [ -n "${OCI_AVAILABILITY_DOMAIN_INDEX:-}" ]; then
+            case "$OCI_AVAILABILITY_DOMAIN_INDEX" in
+              0|1|2) ;;
+              *)
+                echo "::error::OCI_AVAILABILITY_DOMAIN_INDEX must be 0, 1, or 2"
+                exit 1
+                ;;
+            esac
+          fi
+          ocir_set=0
+          for name in OCIR_REGION_KEY OCIR_NAMESPACE OCIR_USERNAME OCIR_AUTH_TOKEN; do
+            if [ -n "${!name}" ]; then
+              ocir_set=$((ocir_set + 1))
+            fi
+          done
+          if [ "$ocir_set" -ne 0 ] && [ "$ocir_set" -ne 4 ]; then
+            echo "::error::Set all of OCIR_REGION_KEY, OCIR_NAMESPACE, OCIR_USERNAME, and OCIR_AUTH_TOKEN, or leave all four unset."
+            exit 1
+          fi
+          if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "anon_key=true" >> "$GITHUB_OUTPUT"
+            echo "SUPABASE_ANON_KEY is set and will be checked after checkout. service_role keys are rejected."
+          else
+            echo "anon_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Reject a service role key
+        if: steps.guard.outputs.anon_key == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python3 ArkaTask-employee-notification/deploy/write-anon-key.py --check
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.2"
+          terraform_wrapper: false
+
+      - name: Write the OCI API key
+        env:
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          raw = os.environ["OCI_PRIVATE_KEY"]
+          if "\\n" in raw and "-----BEGIN" not in raw.splitlines()[0]:
+              raw = raw.replace("\\n", "\n")
+          if not raw.endswith("\n"):
+              raw += "\n"
+          path = Path.home() / ".oci" / "oci_api_key.pem"
+          path.parent.mkdir(mode=0o700, exist_ok=True)
+          path.write_text(raw)
+          path.chmod(0o600)
+          if "PRIVATE KEY" not in raw.splitlines()[0]:
+              raise SystemExit("OCI_PRIVATE_KEY does not look like a PEM private key")
+          PY
+
+      - name: Terraform init, plan, and apply
+        id: terraform
+        working-directory: ArkaTask-employee-notification/terraform-oci
+        env:
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          OCI_SSH_PUBLIC_KEY: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
+          OCI_SSH_CIDR: ${{ secrets.OCI_SSH_CIDR }}
+          OCI_AVAILABILITY_DOMAIN_INDEX: ${{ secrets.OCI_AVAILABILITY_DOMAIN_INDEX }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_NAMESPACE: ${{ secrets.TF_STATE_NAMESPACE }}
+        run: |
+          set -euo pipefail
+          key_file="${HOME}/.oci/oci_api_key.pem"
+          export TF_VAR_tenancy_ocid="$OCI_TENANCY_OCID"
+          export TF_VAR_user_ocid="$OCI_USER_OCID"
+          export TF_VAR_fingerprint="$OCI_FINGERPRINT"
+          export TF_VAR_region="$OCI_REGION"
+          export TF_VAR_compartment_ocid="$OCI_COMPARTMENT_OCID"
+          export TF_VAR_ssh_public_key="$OCI_SSH_PUBLIC_KEY"
+          export TF_VAR_ssh_cidr="$OCI_SSH_CIDR"
+          export TF_VAR_private_key
+          TF_VAR_private_key="$(cat "$key_file")"
+          if [ -n "${OCI_AVAILABILITY_DOMAIN_INDEX:-}" ]; then
+            export TF_VAR_availability_domain_index="$OCI_AVAILABILITY_DOMAIN_INDEX"
+          fi
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="namespace=${TF_STATE_NAMESPACE}" \
+            -backend-config="region=${OCI_REGION}" \
+            -backend-config="auth=APIKey" \
+            -backend-config="tenancy_ocid=${OCI_TENANCY_OCID}" \
+            -backend-config="user_ocid=${OCI_USER_OCID}" \
+            -backend-config="fingerprint=${OCI_FINGERPRINT}" \
+            -backend-config="private_key_path=${key_file}"
+          terraform plan -input=false -out=tfplan
+          terraform apply -input=false tfplan
+          ip="$(terraform output -raw public_ip)"
+          test -n "$ip"
+          echo "public_ip=${ip}" >> "$GITHUB_OUTPUT"
+          rm -f tfplan
+
+      - name: Sync the repo and run the Jenkins job
+        env:
+          PUBLIC_IP: ${{ steps.terraform.outputs.public_ip }}
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JENKINS_ADMIN_PASSWORD: ${{ secrets.JENKINS_ADMIN_PASSWORD }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          OCIR_REGION_KEY: ${{ secrets.OCIR_REGION_KEY }}
+          OCIR_NAMESPACE: ${{ secrets.OCIR_NAMESPACE }}
+          OCIR_USERNAME: ${{ secrets.OCIR_USERNAME }}
+          OCIR_AUTH_TOKEN: ${{ secrets.OCIR_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          raw = os.environ["OCI_SSH_PRIVATE_KEY"]
+          if "\\n" in raw and "-----BEGIN" not in raw.splitlines()[0]:
+              raw = raw.replace("\\n", "\n")
+          if not raw.endswith("\n"):
+              raw += "\n"
+          path = Path.home() / ".ssh" / "oci_deploy"
+          path.parent.mkdir(mode=0o700, exist_ok=True)
+          path.write_text(raw)
+          path.chmod(0o600)
+          PY
+          key="${HOME}/.ssh/oci_deploy"
+          ssh_base=(ssh -i "$key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o ServerAliveInterval=30)
+          ready=0
+          for attempt in $(seq 1 120); do
+            if "${ssh_base[@]}" "ubuntu@${PUBLIC_IP}" "test -f /var/lib/arkatasks-bootstrap.done"; then
+              ready=1
+              break
+            fi
+            echo "waiting for bootstrap marker (${attempt}/120)"
+            sleep 10
+          done
+          if [ "$ready" -ne 1 ]; then
+            "${ssh_base[@]}" "ubuntu@${PUBLIC_IP}" "tail -n 120 /var/log/arkatasks-bootstrap.log || true" || true
+            echo "::error::The VM did not finish bootstrap within 20 minutes. See /var/log/arkatasks-bootstrap.log."
+            exit 1
+          fi
+          rsync -az --delete \
+            --exclude .git \
+            --exclude .terraform \
+            --exclude tfplan \
+            --exclude '*.tfstate' \
+            --exclude '*.tfstate.*' \
+            --exclude .env \
+            --exclude .ocir.env \
+            --exclude seed \
+            -e "ssh -i ${key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+            ./ "ubuntu@${PUBLIC_IP}:/opt/arkatasks/"
+          # printf %q keeps secrets out of the remote command text as raw values.
+          "${ssh_base[@]}" "ubuntu@${PUBLIC_IP}" bash -s <<REMOTE
+          set -euo pipefail
+          export SUPABASE_URL=$(printf '%q' "${SUPABASE_URL%/}")
+          export DB_PASSWORD=$(printf '%q' "$DB_PASSWORD")
+          export JENKINS_ADMIN_PASSWORD=$(printf '%q' "$JENKINS_ADMIN_PASSWORD")
+          export SUPABASE_ANON_KEY=$(printf '%q' "${SUPABASE_ANON_KEY:-}")
+          export OCIR_REGION_KEY=$(printf '%q' "${OCIR_REGION_KEY:-}")
+          export OCIR_NAMESPACE=$(printf '%q' "${OCIR_NAMESPACE:-}")
+          export OCIR_USERNAME=$(printf '%q' "${OCIR_USERNAME:-}")
+          export OCIR_AUTH_TOKEN=$(printf '%q' "${OCIR_AUTH_TOKEN:-}")
+          bash /opt/arkatasks/ArkaTask-employee-notification/deploy/vm-jenkins-deploy.sh
+          REMOTE
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors "http://${PUBLIC_IP}/" -o /dev/null
+          "${ssh_base[@]}" "ubuntu@${PUBLIC_IP}" \
+            "cd /opt/arkatasks/ArkaTask-employee-notification && docker compose -f docker-compose.yml -f docker-compose.registry.yml ps"

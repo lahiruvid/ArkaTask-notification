@@ -5,7 +5,7 @@ Run after docker compose up:
   python3 e2e/test_stack.py
 
 Env:
-  E2E_BASE_URL   default http://127.0.0.1:8880
+  E2E_BASE_URL   default http://127.0.0.1:80
   E2E_ZIPKIN_URL default http://127.0.0.1:9411
 """
 
@@ -17,7 +17,7 @@ import unittest
 import urllib.error
 import urllib.request
 
-BASE = os.environ.get("E2E_BASE_URL", "http://127.0.0.1:8880").rstrip("/")
+BASE = os.environ.get("E2E_BASE_URL", "http://127.0.0.1:80").rstrip("/")
 ZIPKIN = os.environ.get("E2E_ZIPKIN_URL", "http://127.0.0.1:9411").rstrip("/")
 
 
