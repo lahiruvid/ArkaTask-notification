@@ -13,10 +13,9 @@ export type EmployeeLoginResponse = {
   tomorrow: EmployeeApartment[];
 };
 
-const loginBase =
-  process.env.NEXT_PUBLIC_LOGIN_SERVICE_URL || "https://15.236.133.124:8081";
-const cleanBase =
-  process.env.NEXT_PUBLIC_CLEAN_EVENT_SERVICE_URL || "https://15.236.133.124:8082";
+// Oracle backend behind Nginx, e.g. https://api.example.com. Login and clean taps share it.
+// Set at build time; without it the phone check still works but taps cannot be sent.
+const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 
 // Separate storage key so the employee's Supabase Auth session never changes the
 // owner's sync client. RLS on app_state allows the anon role only, and a shared
@@ -157,7 +156,7 @@ export async function requestEmployeeLogin(
   const name = String(match.name ?? "").trim();
   const todayDate = romeDay(0);
   const tomorrowDate = romeDay(1);
-  // The phone matched. Now get a Supabase Auth token for the calls to EC2.
+  // The phone matched. Now get a Supabase Auth token for the calls to the Oracle backend.
   let accessToken = "";
   try {
     accessToken = await signInForAccessToken(cloud);
@@ -173,11 +172,11 @@ export async function requestEmployeeLogin(
     today: apartmentsFor(payload.jobs, employeeId, todayDate),
     tomorrow: apartmentsFor(payload.jobs, employeeId, tomorrowDate),
   };
-  if (!accessToken) return granted;
+  if (!accessToken || !apiBase) return granted;
   try {
-    // Same request: the Supabase token proves the session, then EC2 stores the
+    // Same request: the Supabase token proves the session, then the backend stores the
     // project URL and anon key (public values only, never a service_role key).
-    const response = await fetch(`${loginBase}/api/login`, {
+    const response = await fetch(`${apiBase}/api/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -192,9 +191,12 @@ export async function requestEmployeeLogin(
     if (response.ok) {
       const issued = (await response.json()) as Omit<EmployeeLoginResponse, "token">;
       if (issued.employeeId) return { ...issued, token: accessToken };
+    } else {
+      console.warn("Backend login failed with HTTP", response.status);
     }
-  } catch {
+  } catch (e) {
     // The phone check already succeeded. Key storage can be retried on the next login.
+    console.warn("Backend login failed:", e instanceof Error ? e.message : e);
   }
   return granted;
 }
@@ -204,13 +206,16 @@ export async function requestMarkClean(
   apartmentId: string,
   date: string
 ): Promise<void> {
+  if (!apiBase) {
+    throw new Error("The cleaning server is not configured for this app.");
+  }
   const fresh = (await currentAccessToken().catch(() => null)) || token;
   if (!fresh) {
     throw new Error("Sign out and sign in again to mark apartments clean.");
   }
   let response: Response;
   try {
-    response = await fetch(`${cleanBase}/api/cleans`, {
+    response = await fetch(`${apiBase}/api/cleans`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
