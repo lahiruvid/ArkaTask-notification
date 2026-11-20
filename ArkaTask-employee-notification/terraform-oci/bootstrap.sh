@@ -1,9 +1,10 @@
 #!/bin/bash
 # First boot of the Always Free A1 instance. Idempotent.
 # Cloud-init runs this as root from instance metadata user_data.
-# The Jenkins admin password does not exist yet. This script installs Jenkins
-# and leaves it stopped. The deploy writes the password, then runs
-# deploy/arkatasks-configure-jenkins.sh from the synced repo.
+# No secret exists on the VM yet. This script installs Docker, Jenkins, and the
+# Jenkins plugin manager, and leaves Jenkins stopped. The first deploy writes the
+# secret files and runs deploy/arkatasks-configure-jenkins.sh from the checkout,
+# which installs the plugins in deploy/jenkins/plugins.txt and starts Jenkins.
 set -euo pipefail
 umask 022
 
@@ -18,15 +19,17 @@ export NEEDRESTART_MODE=a
 
 wait_for_network() {
   local attempt
-  for attempt in $(seq 1 60); do
+  # The instance boots without a public IP. Terraform attaches the reserved IP a minute or
+  # two after the instance is running; until then there is no route to the internet.
+  for attempt in $(seq 1 90); do
     if timeout 5 bash -c 'cat < /dev/null > /dev/tcp/archive.ubuntu.com/443' 2>/dev/null; then
       echo "outbound network is up"
       return 0
     fi
-    echo "waiting for outbound network (${attempt}/60)"
-    sleep 5
+    echo "waiting for outbound network (${attempt}/90)"
+    sleep 10
   done
-  echo "ERROR: no outbound HTTPS after 5 minutes" >&2
+  echo "ERROR: no outbound HTTPS after 15 minutes" >&2
   return 1
 }
 
@@ -76,6 +79,7 @@ Environment="JENKINS_LISTEN_ADDRESS=127.0.0.1"
 Environment="JENKINS_PORT=8080"
 Environment="JAVA_OPTS=-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false -Djenkins.model.Jenkins.slaveAgentPort=-1 -Xmx768m -Xms256m"
 Environment="CASC_JENKINS_CONFIG=/var/lib/jenkins/casc/jenkins.yaml"
+Environment="SECRETS=/etc/arkatasks/jenkins-secrets"
 TimeoutStartSec=300
 EOF
   systemctl daemon-reload
@@ -124,40 +128,10 @@ write_jenkins_unit
 install -d -o jenkins -g jenkins /var/lib/jenkins/plugins /var/lib/jenkins/casc
 PM_JAR=/usr/local/lib/jenkins-plugin-manager.jar
 if [ ! -s "$PM_JAR" ]; then
-  curl -fsSL -o "$PM_JAR" \
+  retry curl -fsSL -o "$PM_JAR" \
     https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.13.0/jenkins-plugin-manager-2.13.0.jar
 fi
-java -jar "$PM_JAR" \
-  --war /usr/share/java/jenkins.war \
-  --plugin-download-directory /var/lib/jenkins/plugins \
-  --plugins workflow-aggregator git configuration-as-code job-dsl
 chown -R jenkins:jenkins /var/lib/jenkins
-
-# Locked stub until the workflow supplies JENKINS_ADMIN_PASSWORD.
-stub_pass=$(openssl rand -hex 24)
-python3 - "$stub_pass" <<'PY'
-import json, pathlib, sys
-password = json.dumps(sys.argv[1])
-text = f"""jenkins:
-  systemMessage: "ArkaTasks bootstrap is waiting for the deploy to set the admin password."
-  numExecutors: 1
-  mode: NORMAL
-  securityRealm:
-    local:
-      allowsSignup: false
-      users:
-        - id: "admin"
-          password: {password}
-  authorizationStrategy:
-    loggedInUsersCanDoAnything:
-      allowAnonymousRead: false
-"""
-path = pathlib.Path("/var/lib/jenkins/casc/jenkins.yaml")
-path.write_text(text)
-path.chmod(0o600)
-PY
-chown jenkins:jenkins /var/lib/jenkins/casc/jenkins.yaml
-unset stub_pass
 
 if id ubuntu >/dev/null 2>&1; then
   usermod -aG docker ubuntu
@@ -175,8 +149,12 @@ else
   iptables-save > /etc/iptables/rules.v4
 fi
 
+# Swap is a safety net for build peaks, not working memory.
+echo 'vm.swappiness=10' > /etc/sysctl.d/90-arkatasks.conf
+sysctl -p /etc/sysctl.d/90-arkatasks.conf
+
 if [ ! -f /swapfile ]; then
-  fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+  fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none
   chmod 600 /swapfile
   mkswap /swapfile
 fi

@@ -35,11 +35,13 @@ resource "oci_core_instance" "this" {
     boot_volume_size_in_gbs = var.boot_volume_gbs
   }
 
+  # No ephemeral IP: OCI refuses a reserved IP on a private IP that already has one.
+  # bootstrap.sh waits until the reserved IP below gives the instance a route out.
   create_vnic_details {
     subnet_id              = oci_core_subnet.public.id
     nsg_ids                = [oci_core_network_security_group.this.id]
     hostname_label         = "arkatasks"
-    assign_public_ip       = true
+    assign_public_ip       = false
     skip_source_dest_check = false
   }
 
@@ -66,8 +68,8 @@ data "oci_core_private_ips" "primary" {
   vnic_id = data.oci_core_vnic_attachments.this.vnic_attachments[0].vnic_id
 }
 
-# Ephemeral address exists at boot so cloud-init has a route. This reserved
-# address replaces it before the apply finishes. The workflow uses this IP.
+# The only public address of the instance. It survives instance replacement in the
+# sense that a new instance can take it over, and the workflow uses it for SSH.
 resource "oci_core_public_ip" "reserved" {
   compartment_id = var.compartment_ocid
   lifetime       = "RESERVED"
