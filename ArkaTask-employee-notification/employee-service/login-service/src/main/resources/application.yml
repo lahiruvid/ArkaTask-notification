@@ -1,27 +1,20 @@
 server:
   port: 8081
+  shutdown: graceful
 spring:
   application:
     name: login-service
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
-  datasource:
-    url: ${SUPABASE_DB_URL:}
-    username: ${SUPABASE_DB_USER:}
-    password: ${SUPABASE_DB_PASSWORD:}
 app:
   timezone: ${APP_TIMEZONE:Europe/Rome}
-  clean-event-url: ${CLEAN_EVENT_URL:http://clean-event-service:8082}
+  session-file: ${EMPLOYEE_SESSIONS_FILE:/var/lib/arkatasks/employee-sessions.json}
 supabase:
-  # Project URL, e.g. https://<project-ref>.supabase.co . JWKS URL and issuer are derived from it.
+  # Public project URL, https://<project-ref>.supabase.co. When set it pins the project:
+  # the JWKS URL and token issuer are derived from it and no other project is accepted.
   url: ${SUPABASE_URL:}
+  # Public anon or sb_publishable_ key. Used until an employee login saves the keys file.
+  # A service_role or sb_secret_ key stops the service at startup.
   anon-key: ${SUPABASE_ANON_KEY:}
   allow-missing-config: ${SUPABASE_ALLOW_MISSING_CONFIG:true}
-  jwks-url: ${SUPABASE_JWKS_URL:}
-  issuer: ${SUPABASE_JWT_ISSUER:}
   audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
   allowed-algs: ${SUPABASE_JWT_ALGS:RS256,ES256}
   clock-skew-seconds: 30
@@ -32,45 +25,31 @@ supabase:
 eureka:
   client:
     service-url:
-      defaultZone: http://eureka:8761/eureka/
-    register-with-eureka: true
-    fetch-registry: true
+      defaultZone: ${EUREKA_URL:http://eureka:8761/eureka/}
+  instance:
+    prefer-ip-address: true
 management:
   endpoints:
     web:
-      base-path: /actuator
       exposure:
-        include: health,metrics,info
+        include: health,info
   endpoint:
     health:
-      show-details: always
-  health:
-    group:
-      readiness:
-        include: diskSpace
+      show-details: never
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
 resilience4j:
   ratelimiter:
     configs:
       per-phone:
-        # Disabled in PhoneLoginLimiter. These values are not enforced.
-        limit-for-period: 100000
-        limit-refresh-period: 1s
+        limit-for-period: 10
+        limit-refresh-period: 15m
         timeout-duration: 0s
     instances:
-      # Disabled on POST /api/login. These values are not enforced.
-      login:
-        limit-for-period: 100000
-        limit-refresh-period: 1s
-        timeout-duration: 0s
-      # Copied onto one limiter per phone number.
+      # Template for the one limiter per phone number in PhoneLoginLimiter.
       per-phone:
         base-config: per-phone
-  retry:
-    instances:
-      interService:
-        max-attempts: 3
-        wait-duration: 200ms
-        enable-exponential-backoff: true
-        exponential-backoff-multiplier: 2
-        retry-exceptions:
-          - org.springframework.web.client.RestClientException

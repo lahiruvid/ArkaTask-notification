@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-// Rate limit disabled for E2E. Restore: import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,7 +33,6 @@ public class LoginController {
   private static final Logger log = LoggerFactory.getLogger(LoginController.class);
   private final ZoneId zone;
   private final PhoneLoginLimiter phoneLimits;
-  private final CleanEventClient cleanEventClient;
   private final SupabaseKeysFile keysFile;
   private final EmployeeIdentityStore identities;
   private final SupabaseAppState appState;
@@ -42,20 +40,17 @@ public class LoginController {
   public LoginController(
       @Value("${app.timezone:Europe/Rome}") String timezone,
       PhoneLoginLimiter phoneLimits,
-      CleanEventClient cleanEventClient,
       SupabaseKeysFile keysFile,
       EmployeeIdentityStore identities,
       SupabaseAppState appState) {
     this.zone = ZoneId.of(timezone);
     this.phoneLimits = phoneLimits;
-    this.cleanEventClient = cleanEventClient;
     this.keysFile = keysFile;
     this.identities = identities;
     this.appState = appState;
   }
 
   @PostMapping("/api/login")
-  // @RateLimiter(name = "login", fallbackMethod = "loginRateLimited")
   public ResponseEntity<Map<String, Object>> login(
       HttpServletRequest request, @RequestBody Map<String, String> body) throws Exception {
     Claims claims = SupabaseAuthFilter.claims(request);
@@ -66,9 +61,9 @@ public class LoginController {
     if (typed.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is required.");
     }
-    // if (!phoneLimits.allow(typed)) {
-    //   return loginRateLimited(body, null);
-    // }
+    if (!phoneLimits.allow(typed)) {
+      return error(HttpStatus.TOO_MANY_REQUESTS, "Too many login attempts for this phone number. Try again in 15 minutes.");
+    }
     SupabaseKeysFile.Creds creds;
     try {
       creds = keysFile.validate(body.get("supabaseUrl"), body.get("supabaseAnonKey"));
@@ -126,7 +121,6 @@ public class LoginController {
     out.put("tomorrowDate", tomorrow.toString());
     out.put("today", apartments(root.path("jobs"), employeeId, today.toString()));
     out.put("tomorrow", apartments(root.path("jobs"), employeeId, tomorrow.toString()));
-    cleanEventClient.employeeOpened(employeeId, name);
     return ResponseEntity.ok(out);
   }
 
@@ -153,13 +147,6 @@ public class LoginController {
       }
     }
     throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found.");
-  }
-
-  public ResponseEntity<Map<String, Object>> loginRateLimited(
-      Map<String, String> body, Throwable ignored) {
-    Map<String, Object> error = new LinkedHashMap<>();
-    error.put("error", "Too many login attempts for this phone number. Try again in 15 minutes.");
-    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
   }
 
   private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {

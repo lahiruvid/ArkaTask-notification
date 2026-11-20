@@ -42,19 +42,18 @@ public class SupabaseAppState {
 
   /**
    * Payload of the app_state row id=main, or null when that row is absent.
-   * The anon key is sent as apikey and Authorization and is not written to logs.
+   * The anon key is sent as apikey (and as Authorization when it is a JWT) and is not written to logs.
    */
   public JsonNode fetch(String supabaseUrl, String anonKey) {
     SupabaseKeysFile.requirePublicKey(anonKey);
     String base = SupabaseKeysFile.normalizeUrl(supabaseUrl);
     URI uri = URI.create(base + "/rest/v1/app_state?id=eq.main&select=payload");
-    HttpRequest request = HttpRequest.newBuilder(uri)
+    HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
         .timeout(Duration.ofSeconds(10))
-        .header("apikey", anonKey)
-        .header("Authorization", "Bearer " + anonKey)
         .header("Accept", "application/json")
-        .GET()
-        .build();
+        .GET();
+    SupabaseKeysFile.authHeaders(anonKey).forEach(builder::header);
+    HttpRequest request = builder.build();
     HttpResponse<String> response;
     try {
       response = http.send(request, HttpResponse.BodyHandlers.ofString());

@@ -39,7 +39,7 @@ class LoginControllerTokenTest {
   SupabaseAppState appState;
   SupabaseKeysFile keys;
   EmployeeIdentityStore identities;
-  CleanEventClient cleanEvent;
+  PhoneLoginLimiter limiter;
   LoginController controller;
 
   @BeforeEach
@@ -49,9 +49,9 @@ class LoginControllerTokenTest {
     when(appState.fetch(eq(URL), any(String.class))).thenReturn(json.readTree(PAYLOAD));
     keys = new SupabaseKeysFile(dir.resolve("supabase-keys.json"), URL, json);
     identities = mock(EmployeeIdentityStore.class);
-    cleanEvent = mock(CleanEventClient.class);
-    controller = new LoginController("Europe/Rome", mock(PhoneLoginLimiter.class),
-        cleanEvent, keys, identities, appState);
+    limiter = mock(PhoneLoginLimiter.class);
+    when(limiter.allow(any(String.class))).thenReturn(true);
+    controller = new LoginController("Europe/Rome", limiter, keys, identities, appState);
   }
 
   MockHttpServletRequest withClaims() {
@@ -86,7 +86,24 @@ class LoginControllerTokenTest {
         Files.getPosixFilePermissions(keys.path())));
     verify(appState).fetch(URL, anon);
     verify(identities).save("auth-uid-1", "e1", "Ana", "+39 333 111 2222");
-    verify(cleanEvent).employeeOpened("e1", "Ana");
+  }
+
+  @Test
+  void tooManyAttemptsForOnePhoneIs429AndNothingRead() throws Exception {
+    when(limiter.allow("3331112222")).thenReturn(false);
+    var res = controller.login(withClaims(), body(SupabaseKeysFileTest.fakeJwt("anon")));
+    assertEquals(429, res.getStatusCode().value());
+    assertTrue(String.valueOf(res.getBody().get("error")).contains("Too many login attempts"));
+    verify(appState, never()).fetch(any(), any());
+  }
+
+  @Test
+  void pinnedProjectRefusesAnotherProject() throws Exception {
+    var pinned = new SupabaseKeysFile(dir.resolve("pinned.json"), "https://pinned.supabase.co", json);
+    var other = new LoginController("Europe/Rome", limiter, pinned, identities, appState);
+    var res = other.login(withClaims(), body(SupabaseKeysFileTest.fakeJwt("anon")));
+    assertEquals(400, res.getStatusCode().value());
+    assertFalse(Files.exists(pinned.path()));
   }
 
   @Test

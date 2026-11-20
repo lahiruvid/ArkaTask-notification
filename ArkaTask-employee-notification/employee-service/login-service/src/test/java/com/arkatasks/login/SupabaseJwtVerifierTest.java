@@ -282,6 +282,17 @@ class SupabaseJwtVerifierTest {
   }
 
   @Test
+  void pinnedProjectRefusesAnyOtherProject() {
+    var pinned = new SupabaseJwtVerifier(cache, ISS, "authenticated", Set.of("RS256"), 30, true);
+    pinned.adoptProject(URL + "/");
+    assertEquals(400, assertThrows(SupabaseJwtVerifier.AuthException.class,
+        () -> pinned.adoptProject("https://other.supabase.co")).status());
+    assertEquals(400, assertThrows(SupabaseJwtVerifier.AuthException.class,
+        () -> pinned.adoptProject("https://evil.example.com")).status());
+    pinned.verify("Bearer " + valid());
+  }
+
+  @Test
   void notConfiguredAnswers503() {
     var v = new SupabaseJwtVerifier(null, "", "authenticated", Set.of("RS256"), 30);
     assertEquals(503, assertThrows(SupabaseJwtVerifier.AuthException.class, () -> v.verify("Bearer " + valid())).status());

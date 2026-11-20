@@ -12,14 +12,18 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Base64;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * The two public Supabase values (project URL and anon/publishable key) in one local file,
- * mode 600, owned by the user running this service. Secret or service_role keys are refused.
- * Values are never logged.
+ * The two public Supabase values (project URL and anon/publishable key).
+ *
+ * <p>They come from the server config (SUPABASE_URL and SUPABASE_ANON_KEY) when those are set,
+ * and from one local file, mode 600, that login-service writes after a verified employee login.
+ * When SUPABASE_URL is set, the file can only hold that project. Secret or service_role keys are
+ * refused everywhere. Values are never logged.
+ *
+ * <p>Kept identical in login-service and clean-event-service apart from the package name.
  */
 public class SupabaseKeysFile {
   public record Creds(String url, String anonKey) {}
@@ -36,16 +40,31 @@ public class SupabaseKeysFile {
 
   private final Path path;
   private final String expectedUrl;
+  private final Creds configured;
   private final ObjectMapper json;
 
   public SupabaseKeysFile(Path path, String expectedUrl, ObjectMapper json) {
+    this(path, expectedUrl, "", json);
+  }
+
+  /**
+   * @param configuredUrl SUPABASE_URL, or empty. When set, only this project is accepted.
+   * @param configuredAnonKey SUPABASE_ANON_KEY, or empty. Used until a login saves the file.
+   */
+  public SupabaseKeysFile(Path path, String configuredUrl, String configuredAnonKey, ObjectMapper json) {
     this.path = path;
-    this.expectedUrl = normalizeUrl(expectedUrl);
+    this.expectedUrl = normalizeUrl(configuredUrl);
     this.json = json;
+    this.configured = fromConfig(this.expectedUrl, configuredAnonKey);
   }
 
   public Path path() {
     return path;
+  }
+
+  /** The project URL pinned by server config, or empty when the server accepts the first login's project. */
+  public String expectedUrl() {
+    return expectedUrl;
   }
 
   /** Checks format and project. Returns the cleaned values. Never logs them. */
@@ -68,7 +87,7 @@ public class SupabaseKeysFile {
     Creds valid = validate(url, anonKey);
     String cleanUrl = valid.url();
     String cleanKey = valid.anonKey();
-    Creds current = read();
+    Creds current = readFile();
     if (current != null && current.url().equals(cleanUrl) && current.anonKey().equals(cleanKey)) {
       return;
     }
@@ -99,8 +118,19 @@ public class SupabaseKeysFile {
     Files.setPosixFilePermissions(path, FILE_600);
   }
 
-  /** Saved values, or null when the file is missing or unreadable. */
+  /**
+   * Values saved by the last verified login, else the server config, else null.
+   * A saved file for another project than SUPABASE_URL is ignored.
+   */
   public Creds read() {
+    Creds saved = readFile();
+    if (saved != null && (expectedUrl.isEmpty() || expectedUrl.equalsIgnoreCase(normalizeUrl(saved.url())))) {
+      return saved;
+    }
+    return configured;
+  }
+
+  private Creds readFile() {
     try {
       if (!Files.isRegularFile(path)) return null;
       JsonNode node = json.readTree(Files.readString(path, StandardCharsets.UTF_8));
@@ -113,10 +143,29 @@ public class SupabaseKeysFile {
     }
   }
 
-  /** Zero or one entry, for the outbox relay loop. */
-  public List<Creds> active() {
-    Creds creds = read();
-    return creds == null ? List.of() : List.of(creds);
+  private static Creds fromConfig(String url, String anonKey) {
+    String key = anonKey == null ? "" : anonKey.replaceAll("\\s", "");
+    if (url.isEmpty() || key.isEmpty()) return null;
+    try {
+      requirePublicKey(key);
+      return new Creds(requireProjectUrl(url), key);
+    } catch (RejectedKeys ex) {
+      throw new IllegalStateException("SUPABASE_URL and SUPABASE_ANON_KEY must be the public project URL "
+          + "and the anon or publishable key: " + ex.getMessage());
+    }
+  }
+
+  /**
+   * Headers for Supabase REST with a public key. A legacy anon JWT also goes in Authorization;
+   * an sb_publishable_ key is sent as apikey only, because it is not a JWT.
+   */
+  public static Map<String, String> authHeaders(String key) {
+    Map<String, String> headers = new LinkedHashMap<>();
+    headers.put("apikey", key);
+    if (key.split("\\.").length == 3) {
+      headers.put("Authorization", "Bearer " + key);
+    }
+    return headers;
   }
 
   /** Refuses service_role / secret keys. Accepts legacy anon JWTs and sb_publishable_ keys. */
