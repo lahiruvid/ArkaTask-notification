@@ -7,8 +7,8 @@
 backend.hcl
 tfplan
 *.tfplan
-.ocir.env
-seed/
+.env
+certs/
 
 __pycache__/
 *.pyc

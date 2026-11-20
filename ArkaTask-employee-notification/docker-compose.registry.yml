@@ -1,16 +1,14 @@
-# Image names produced by deploy/build-arm.sh.
-# REGISTRY=local uses images loaded on this host. An OCIR prefix pulls when missing.
-# Nginx is the stock image in docker-compose.yml, not a built tag.
+# Docker Hub images for the Oracle VM. Jenkins builds and pushes these tags, then runs:
+#   docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build
+# IMAGE_TAG_SUFFIX is empty for the latest build. Set it to -<git sha> to roll back.
+# Kafka, RabbitMQ, Zipkin, and Nginx are stock images from docker-compose.yml.
 services:
   eureka:
-    image: ${REGISTRY:-local}/arkatasks-employee-notification:eureka
-    pull_policy: if_not_present
+    image: docker.io/${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME}/arkatasks-employee-notification:eureka${IMAGE_TAG_SUFFIX:-}
   login-service:
-    image: ${REGISTRY:-local}/arkatasks-employee-notification:login-service
-    pull_policy: if_not_present
+    image: docker.io/${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME}/arkatasks-employee-notification:login-service${IMAGE_TAG_SUFFIX:-}
   clean-event-service:
-    image: ${REGISTRY:-local}/arkatasks-employee-notification:clean-event-service
-    pull_policy: if_not_present
+    image: docker.io/${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME}/arkatasks-employee-notification:clean-event-service${IMAGE_TAG_SUFFIX:-}
   owner-notifier:
-    image: ${REGISTRY:-local}/arkatasks-employee-notification:owner-notifier
-    pull_policy: if_not_present
+    image: docker.io/${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME}/arkatasks-employee-notification:owner-notifier${IMAGE_TAG_SUFFIX:-}
