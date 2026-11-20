@@ -1,32 +1,48 @@
 #!/usr/bin/env python3
-"""Replace one KEY=value line in ./.env. Values are quoted and not printed."""
+"""Read or replace one KEY=value line in ./.env without printing other values.
+
+  envfile.py KEY VALUE   write KEY="VALUE" (quoted for docker compose)
+  envfile.py --get KEY   print the value of KEY, or nothing
+"""
 
 import pathlib
 import sys
 
-if len(sys.argv) != 3:
-    raise SystemExit("usage: envfile.py KEY VALUE")
+PATH = pathlib.Path(".env")
 
-key, value = sys.argv[1], sys.argv[2]
-if not key or any(ch in value for ch in "\n\r"):
-    raise SystemExit(f"{key} must be a single line")
 
-escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-line = f'{key}="{escaped}"'
-path = pathlib.Path(".env")
-existing = path.read_text().splitlines() if path.exists() else []
-out = []
-found = False
-for current in existing:
-    if current.startswith(key + "="):
+def read(key: str) -> str:
+    if not PATH.exists():
+        return ""
+    for line in PATH.read_text().splitlines():
+        if line.startswith(key + "="):
+            value = line.split("=", 1)[1].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            return value
+    return ""
+
+
+def write(key: str, value: str) -> None:
+    if not key or any(ch in value for ch in "\n\r"):
+        raise SystemExit(f"{key} must be a single line")
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    line = f'{key}="{escaped}"'
+    existing = PATH.read_text().splitlines() if PATH.exists() else []
+    out = [line if current.startswith(key + "=") else current for current in existing]
+    if line not in out:
         out.append(line)
-        found = True
+    PATH.write_text("\n".join(out) + "\n")
+
+
+def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--get":
+        print(read(sys.argv[2]))
+    elif len(sys.argv) == 3:
+        write(sys.argv[1], sys.argv[2])
     else:
-        out.append(current)
-if not found:
-    out.append(line)
-path.write_text("\n".join(out) + "\n")
-try:
-    path.chmod(0o660)
-except PermissionError:
-    pass
+        raise SystemExit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

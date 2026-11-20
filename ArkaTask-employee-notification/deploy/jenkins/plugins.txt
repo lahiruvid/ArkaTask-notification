@@ -1,0 +1,5 @@
+configuration-as-code
+credentials
+credentials-binding
+plain-credentials
+workflow-aggregator

@@ -1,0 +1,34 @@
+# Jenkins Configuration as Code for the ArkaTasks VM. Copied to /var/lib/jenkins/casc on every
+# deploy, so changes made in the Jenkins UI are overwritten. ${...} values are read from files in
+# the SECRETS directory (/etc/arkatasks/jenkins-secrets), which the GitHub workflow fills from the
+# repository secrets of the same names. No secret value is stored in git.
+jenkins:
+  systemMessage: "ArkaTasks on Oracle Cloud. Configured from git (deploy/jenkins/jenkins.yaml)."
+  numExecutors: 1
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "dockerhub-username"
+              description: "Docker Hub user (GitHub secret DOCKERHUB_USERNAME)"
+              secret: "${DOCKERHUB_USERNAME}"
+          - string:
+              scope: GLOBAL
+              id: "dockerhub-token"
+              description: "Docker Hub access token (GitHub secret DOCKERHUB_TOKEN)"
+              secret: "${DOCKERHUB_TOKEN}"
+unclassified:
+  location:
+    url: "http://127.0.0.1:8080/"

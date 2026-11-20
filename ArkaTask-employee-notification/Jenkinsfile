@@ -1,68 +1,91 @@
-// OCI pipeline. The GitHub workflow seeds this job and triggers it.
-// Builds the four Java images on this ARM host. Nginx is the stock image.
-// The web UI is on Cloudflare, and Postgres is Supabase. OCIR is optional.
+// ArkaTasks deploy pipeline on the Oracle Ampere A1 VM (linux/arm64).
+// The GitHub workflow checks out the pushed commit in /opt/arkatasks, seeds this job from this
+// file (deploy/arkatasks-configure-jenkins.sh), and triggers it. Stages follow ORACLE-DEV-BRIEF.md:
+// Checkout, Build/test, Docker build, Docker Hub login, Push, Deploy, Health check, Cleanup.
+// Docker Hub credentials come from JCasC (deploy/jenkins/jenkins.yaml); none are in git.
 
 pipeline {
   agent any
   options {
-    timeout(time: 150, unit: 'MINUTES')
+    timeout(time: 90, unit: 'MINUTES')
     disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
   }
   environment {
+    REPO_DIR = '/opt/arkatasks'
     APP_DIR = '/opt/arkatasks/ArkaTask-employee-notification'
+    DOCKERHUB_USERNAME = credentials('dockerhub-username')
+    MAVEN_OPTS = '-Xmx512m'
   }
   stages {
-    stage('Build ARM images') {
+    stage('Checkout') {
       steps {
+        sh '''
+          rm -rf "$WORKSPACE/src"
+          mkdir -p "$WORKSPACE/src"
+          git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" archive --format=tar HEAD | tar -x -C "$WORKSPACE/src"
+          git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" rev-parse --short=12 HEAD > "$WORKSPACE/commit"
+        '''
         script {
-          def ids = ['ocir-region-key', 'ocir-namespace', 'ocir-username', 'ocir-auth-token']
-          def haveCreds = false
-          try {
-            def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
-              com.cloudbees.plugins.credentials.Credentials.class,
-              jenkins.model.Jenkins.instance,
-              null,
-              java.util.Collections.emptyList()
-            )
-            def present = creds.collect { it.id } as Set
-            haveCreds = ids.every { present.contains(it) }
-          } catch (Throwable ignored) {
-            haveCreds = false
-          }
-          if (haveCreds) {
-            withCredentials([
-              string(credentialsId: 'ocir-region-key', variable: 'OCIR_REGION_KEY'),
-              string(credentialsId: 'ocir-namespace', variable: 'OCIR_NAMESPACE'),
-              string(credentialsId: 'ocir-username', variable: 'OCIR_USERNAME'),
-              string(credentialsId: 'ocir-auth-token', variable: 'OCIR_AUTH_TOKEN'),
-            ]) {
-              sh 'bash "$APP_DIR/deploy/jenkins-build.sh"'
-            }
-          } else {
-            sh 'bash "$APP_DIR/deploy/jenkins-build.sh"'
-          }
+          env.GIT_SHA = readFile("${env.WORKSPACE}/commit").trim()
+          env.BUILD_DIR = "${env.WORKSPACE}/src/ArkaTask-employee-notification"
+        }
+        echo "Commit ${env.GIT_SHA}"
+      }
+    }
+    stage('Build/test (Maven)') {
+      steps {
+        sh '''
+          for module in employee-service/eureka-server employee-service/login-service \
+                        employee-service/clean-event-service owner-notifier; do
+            echo "== mvn verify ${module}"
+            mvn -B -ntp -DargLine=-Xmx384m -f "$BUILD_DIR/${module}/pom.xml" verify
+          done
+        '''
+      }
+    }
+    stage('Docker build (linux/arm64)') {
+      steps {
+        sh 'PLATFORM=linux/arm64 bash "$BUILD_DIR/deploy/build-arm.sh"'
+      }
+    }
+    stage('Docker Hub login') {
+      steps {
+        withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
+          sh 'printf "%s" "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin'
         }
       }
     }
-    stage('Compose up') {
+    stage('Push') {
+      steps {
+        sh 'bash "$BUILD_DIR/deploy/push-images.sh"'
+      }
+    }
+    stage('Deploy') {
       steps {
         sh 'bash "$APP_DIR/deploy/compose-up.sh"'
       }
     }
-    stage('Seed Supabase anon key') {
-      steps {
-        sh 'bash "$APP_DIR/deploy/seed-anon-key.sh"'
-      }
-    }
-    stage('Health') {
+    stage('Health check') {
       steps {
         sh 'bash "$APP_DIR/deploy/health-check.sh"'
       }
     }
-    stage('E2E') {
+    stage('Cleanup') {
       steps {
-        sh 'cd "$APP_DIR" && E2E_BASE_URL=http://127.0.0.1:80 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 e2e/test_stack.py'
+        sh '''
+          docker image prune -f
+          docker builder prune -f --filter until=168h
+        '''
       }
+    }
+  }
+  post {
+    always {
+      sh 'docker logout docker.io >/dev/null 2>&1 || true'
+    }
+    failure {
+      sh 'cd "$APP_DIR" && docker compose -f docker-compose.yml -f docker-compose.registry.yml ps --all || true'
     }
   }
 }

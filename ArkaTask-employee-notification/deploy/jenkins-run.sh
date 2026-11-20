@@ -7,7 +7,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-PASS_FILE=/etc/arkatasks/jenkins-admin.password
+PASS_FILE=/etc/arkatasks/jenkins-secrets/JENKINS_ADMIN_PASSWORD
 BASE=http://127.0.0.1:8080
 JOB=arkatasks-deploy
 COOKIE=$(mktemp)

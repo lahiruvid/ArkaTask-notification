@@ -1,51 +1,48 @@
 #!/bin/bash
-# Runs on the VM over SSH after the repo sync. Writes .env, configures Jenkins, triggers the job.
+# Runs on the VM as ubuntu over SSH, after the workflow checked out the pushed commit in
+# /opt/arkatasks. Writes .env and the Jenkins secret files, configures Jenkins, runs the job.
+#
+# Environment from the workflow: JENKINS_ADMIN_PASSWORD, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN,
+# and optionally SUPABASE_URL and SUPABASE_ANON_KEY (public values only).
 set -euo pipefail
-cd /opt/arkatasks/ArkaTask-employee-notification
+cd "$(dirname "$0")/.."
 
-: "${JENKINS_ADMIN_PASSWORD:?JENKINS_ADMIN_PASSWORD is required}"
+for name in JENKINS_ADMIN_PASSWORD DOCKERHUB_USERNAME DOCKERHUB_TOKEN; do
+  if [ -z "${!name:-}" ]; then
+    echo "ERROR: ${name} is required" >&2
+    exit 1
+  fi
+done
 
-python3 deploy/envfile.py REGISTRY "${REGISTRY:-local}"
-# Leave Supabase URL and anon key empty. POST /api/login fills the keys file.
-sudo chgrp jenkins .env
-sudo chmod 660 .env
+SECRETS_DIR=/etc/arkatasks/jenkins-secrets
+CERT_DIR=/etc/arkatasks/certs
 
+# .env holds public settings only. The Docker Hub token is not in it.
+python3 deploy/check-supabase-keys.py
+python3 deploy/envfile.py DOCKERHUB_USERNAME "$DOCKERHUB_USERNAME"
+python3 deploy/envfile.py TLS_CERT_DIR "$CERT_DIR"
+if [ -n "${SUPABASE_URL:-}" ]; then
+  python3 deploy/envfile.py SUPABASE_URL "${SUPABASE_URL%/}"
+fi
 if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-  python3 deploy/write-anon-key.py
-  sudo chgrp jenkins seed seed/supabase-keys.json
-  sudo chmod 750 seed
-  sudo chmod 640 seed/supabase-keys.json
-else
-  rm -rf seed
+  python3 deploy/envfile.py SUPABASE_ANON_KEY "$(printf '%s' "$SUPABASE_ANON_KEY" | tr -d '[:space:]')"
 fi
+sudo chgrp jenkins .env
+sudo chmod 640 .env
 
-if [ -z "${OCIR_AUTH_TOKEN:-}" ]; then
-  rm -f .ocir.env
-fi
+# One file per secret, read by Jenkins Configuration as Code (SECRETS directory).
+sudo install -d -m 750 -o root -g jenkins "$SECRETS_DIR"
+write_secret() {
+  printf '%s' "$2" | sudo tee "${SECRETS_DIR}/$1" >/dev/null
+  sudo chown jenkins:jenkins "${SECRETS_DIR}/$1"
+  sudo chmod 600 "${SECRETS_DIR}/$1"
+}
+write_secret JENKINS_ADMIN_PASSWORD "$JENKINS_ADMIN_PASSWORD"
+write_secret DOCKERHUB_USERNAME "$DOCKERHUB_USERNAME"
+write_secret DOCKERHUB_TOKEN "$DOCKERHUB_TOKEN"
+# Left by an earlier version of this script.
+sudo rm -f /etc/arkatasks/jenkins-admin.password
 
-if [ -n "${OCIR_AUTH_TOKEN:-}" ]; then
-  : "${OCIR_REGION_KEY:?}"
-  : "${OCIR_NAMESPACE:?}"
-  : "${OCIR_USERNAME:?}"
-  python3 - <<'PY'
-import os, pathlib, shlex
-lines = [
-    f"OCIR_REGION_KEY={shlex.quote(os.environ['OCIR_REGION_KEY'])}",
-    f"OCIR_NAMESPACE={shlex.quote(os.environ['OCIR_NAMESPACE'])}",
-    f"OCIR_USERNAME={shlex.quote(os.environ['OCIR_USERNAME'])}",
-    f"OCIR_AUTH_TOKEN={shlex.quote(os.environ['OCIR_AUTH_TOKEN'])}",
-]
-path = pathlib.Path(".ocir.env")
-path.write_text("\n".join(lines) + "\n")
-path.chmod(0o640)
-PY
-  sudo chgrp jenkins .ocir.env
-  sudo chmod 640 .ocir.env
-fi
-
-printf '%s\n' "$JENKINS_ADMIN_PASSWORD" | sudo tee /etc/arkatasks/jenkins-admin.password >/dev/null
-sudo chmod 600 /etc/arkatasks/jenkins-admin.password
-sudo chown jenkins:jenkins /etc/arkatasks/jenkins-admin.password
-
+sudo bash deploy/ensure-tls-cert.sh "$CERT_DIR"
 sudo bash deploy/arkatasks-configure-jenkins.sh
 sudo bash deploy/jenkins-run.sh

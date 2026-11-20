@@ -1,42 +1,36 @@
 #!/bin/bash
-# Host checks: nginx on port 80 and the services published on 127.0.0.1.
+# Health check stage: Nginx and each service answer, nothing exited, then the HTTP smoke test.
 set -euo pipefail
-cd "$(dirname "$0")/.."
-
-if docker info >/dev/null 2>&1; then
-  DC=(docker compose)
-else
-  DC=(sudo docker compose)
-fi
-compose() {
-  "${DC[@]}" -f docker-compose.yml -f docker-compose.registry.yml "$@"
-}
+# shellcheck source=deploy/lib.sh
+. "$(dirname "$0")/lib.sh"
 
 wait_url() {
-  local url="$1"
-  local attempt code
-  for attempt in $(seq 1 60); do
+  local url="$1" attempt code
+  for attempt in $(seq 1 40); do
     code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" || true)
     if [ "$code" = "200" ]; then
       echo "ok ${url}"
       return 0
     fi
-    echo "wait ${url} -> ${code:-none} (${attempt}/60)"
+    echo "wait ${url} -> ${code:-none} (${attempt}/40)"
     sleep 5
   done
   echo "ERROR: ${url} did not return 200" >&2
   return 1
 }
 
+wait_url "http://127.0.0.1/nginx-health"
 wait_url "http://127.0.0.1/actuator/health"
 wait_url "http://127.0.0.1:18081/actuator/health"
 wait_url "http://127.0.0.1:18082/actuator/health"
+wait_url "http://127.0.0.1:18083/actuator/health"
 wait_url "http://127.0.0.1:9411/health"
 
-compose ps
-if [ -n "$(compose ps --status exited -q || true)" ]; then
+if [ -n "$(compose ps --all --status exited -q)" ]; then
   echo "ERROR: a container exited" >&2
-  compose ps -a
+  compose ps --all
   exit 1
 fi
-echo "stack is up"
+
+E2E_BASE_URL=http://127.0.0.1 E2E_ZIPKIN_URL=http://127.0.0.1:9411 python3 "$APP_DIR/e2e/test_stack.py"
+echo "stack is healthy"
