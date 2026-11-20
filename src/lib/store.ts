@@ -894,6 +894,28 @@ function toDigits(phone: string | null | undefined): string {
   return (phone ?? "").replace(/\D/g, "");
 }
 
+/**
+ * Active employee whose phone matches the typed number.
+ * Digits only. A stored +39 prefix still matches the local number.
+ */
+export function findActiveEmployeeByPhone(input: string): Employee | null {
+  const typed = toDigits(input);
+  if (!typed) return null;
+  const employees = getActiveEmployees().filter(
+    (e) => toDigits(e.phone).length > 0
+  );
+  const exact = employees.find((e) => toDigits(e.phone) === typed);
+  if (exact) return exact;
+  if (typed.length < 8) return null;
+  return (
+    employees.find((e) => {
+      const stored = toDigits(e.phone);
+      if (stored.length < 8) return false;
+      return stored.endsWith(typed) || typed.endsWith(stored);
+    }) ?? null
+  );
+}
+
 function scheduleWrite(data: AppData) {
   memory = data;
   if (typeof window === "undefined") return;

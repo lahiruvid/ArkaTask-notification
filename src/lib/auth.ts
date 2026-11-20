@@ -61,13 +61,58 @@ export function getCredentials(): StoredCred {
   return readCred();
 }
 
-export function isLoggedIn(): boolean {
-  if (typeof window === "undefined") return false;
+export type EmployeeApartment = {
+  apartmentId: string;
+  name: string;
+};
+
+export type AuthSession =
+  | { role: "owner" }
+  | {
+      role: "employee";
+      employeeId: string;
+      name: string;
+      token: string;
+      todayDate: string;
+      tomorrowDate: string;
+      today: EmployeeApartment[];
+      tomorrow: EmployeeApartment[];
+    };
+
+export function readSession(): AuthSession | null {
+  if (typeof window === "undefined") return null;
   try {
-    return localStorage.getItem(SESSION_KEY) === "1";
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw === "1") return { role: "owner" };
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<
+      Extract<AuthSession, { role: "employee" }>
+    >;
+    if (
+      parsed.role === "employee" &&
+      parsed.employeeId &&
+      parsed.name &&
+      parsed.token
+    ) {
+      return {
+        role: "employee",
+        employeeId: String(parsed.employeeId),
+        name: String(parsed.name),
+        token: String(parsed.token),
+        todayDate: String(parsed.todayDate ?? ""),
+        tomorrowDate: String(parsed.tomorrowDate ?? ""),
+        today: Array.isArray(parsed.today) ? parsed.today : [],
+        tomorrow: Array.isArray(parsed.tomorrow) ? parsed.tomorrow : [],
+      };
+    }
   } catch {
-    return false;
+    /* ignore */
   }
+  return null;
+}
+
+export function isLoggedIn(): boolean {
+  return readSession() !== null;
 }
 
 export function login(username: string, password: string): boolean {
@@ -82,6 +127,17 @@ export function login(username: string, password: string): boolean {
     /* ignore */
   }
   return true;
+}
+
+/** Phone login. Stores the employee JWT. Does not change the owner username or password. */
+export function loginEmployee(
+  session: Extract<AuthSession, { role: "employee" }>
+) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    /* ignore */
+  }
 }
 
 export function logout() {

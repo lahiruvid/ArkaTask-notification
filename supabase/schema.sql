@@ -194,6 +194,32 @@ CREATE POLICY "anon_insert_app_full_backups" ON app_full_backups
 CREATE POLICY "anon_delete_app_full_backups" ON app_full_backups
   FOR DELETE TO anon USING (true);
 
+-- Clean-tap outbox for the employee notification services.
+-- One row per apartment, per day, per employee. The clean-event-service
+-- inserts this in the same transaction as the tap, then a scheduled relay
+-- publishes rows that are still PENDING to RabbitMQ.
+--
+-- Query assumptions for login-service (not this table):
+--   Employees and jobs live in app_state.payload (id = 'main').
+--   The separate employees/jobs tables above are unused by the live app.
+--   Match phone on digits only. A stored country prefix still matches.
+--   Skip employees with archived = true and jobs with status = cancelled.
+--   Apartment id is jobs[].property_id. Apartment name is jobs[].place_name.
+--   A job counts when job_assignments[].employee_id equals the employee.
+CREATE TABLE IF NOT EXISTS clean_outbox (
+  apartment_id TEXT NOT NULL,
+  date DATE NOT NULL,
+  employee_id TEXT NOT NULL,
+  employee_name TEXT NOT NULL DEFAULT '',
+  employee_phone TEXT,
+  apartment_name TEXT NOT NULL DEFAULT '',
+  clean_time TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  relayed_at TIMESTAMPTZ,
+  PRIMARY KEY (apartment_id, date, employee_id)
+);
+
 -- Optional maintenance (run manually if history grows large on free DB):
 -- DELETE FROM app_state_history
 -- WHERE id NOT IN (

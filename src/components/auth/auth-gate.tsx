@@ -1,27 +1,33 @@
 "use client";
 
 import { FormEvent, useLayoutEffect, useState } from "react";
-import { KeyRound, Lock, UserRound } from "lucide-react";
+import { KeyRound, Lock, Phone, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmployeeTiles } from "@/components/employee/employee-tiles";
+import { requestEmployeeLogin } from "@/components/employee/employee-api";
+import { loadSavedCloudConfig } from "@/lib/supabase";
 import {
   changePassword,
   changeUsername,
   getUsername,
-  isLoggedIn,
   login,
+  loginEmployee,
   pullCredentialsFromCloud,
+  readSession,
+  type AuthSession,
 } from "@/lib/auth";
 
-type Panel = "login" | "username" | "password";
+type Panel = "login" | "username" | "password" | "employee";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [authed, setAuthed] = useState(false);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [panel, setPanel] = useState<Panel>("login");
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +45,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     // Read session before paint so refresh does not sit on "Loading…".
     setUsername(getUsername());
-    setAuthed(isLoggedIn());
+    setSession(readSession());
     setReady(true);
 
     (async () => {
@@ -96,11 +102,46 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setError(null);
     setInfo(null);
     if (login(username, password)) {
-      setAuthed(true);
+      setSession({ role: "owner" });
       setPassword("");
       return;
     }
     setError("Wrong username or password.");
+  };
+
+  const handleEmployeeSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!loadSavedCloudConfig()) {
+      setPanel("login");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const result = await requestEmployeeLogin(phone);
+      const next: AuthSession = {
+        role: "employee",
+        employeeId: result.employeeId,
+        name: result.name,
+        token: result.token,
+        todayDate: result.todayDate,
+        tomorrowDate: result.tomorrowDate,
+        today: result.today ?? [],
+        tomorrow: result.tomorrow ?? [],
+      };
+      loginEmployee(next);
+      setPhone("");
+      setSession(next);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No employee found with that phone number."
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleChangeUsername = async (e: FormEvent) => {
@@ -140,7 +181,29 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen bg-slate-50" />;
   }
 
-  if (!authed) {
+  const employeeLoginEnabled = loadSavedCloudConfig() !== null;
+  const shownPanel = employeeLoginEnabled || panel !== "employee" ? panel : "login";
+
+  if (session?.role === "employee" && employeeLoginEnabled) {
+    return (
+      <EmployeeTiles
+        name={session.name}
+        token={session.token}
+        todayDate={session.todayDate}
+        tomorrowDate={session.tomorrowDate}
+        today={session.today}
+        tomorrow={session.tomorrow}
+        onSignedOut={() => {
+          setSession(null);
+          setPanel("login");
+          setError(null);
+          setInfo(null);
+        }}
+      />
+    );
+  }
+
+  if (session?.role !== "owner") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="w-full max-w-sm rounded-xl border bg-white p-6 shadow-sm space-y-5">
@@ -158,11 +221,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 ArkaTasks
               </h1>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                {panel === "login"
+                {shownPanel === "login"
                   ? "Sign in"
-                  : panel === "username"
-                    ? "Change username"
-                    : "Change password"}
+                  : shownPanel === "employee"
+                    ? "Employee login"
+                    : shownPanel === "username"
+                      ? "Change username"
+                      : "Change password"}
               </p>
             </div>
           </div>
@@ -176,7 +241,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </p>
           ) : null}
 
-          {panel === "login" ? (
+          {shownPanel === "login" ? (
             <>
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div className="space-y-1.5">
@@ -212,6 +277,18 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                   Supabase → <span className="font-medium">app_login</span>.
                 </p>
                 <div className="flex flex-wrap gap-2">
+                  {employeeLoginEnabled ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => openPanel("employee")}
+                    >
+                      <Phone className="h-3.5 w-3.5" />
+                      Employee Login
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
@@ -237,7 +314,36 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </>
           ) : null}
 
-          {panel === "username" ? (
+          {shownPanel === "employee" ? (
+            <form onSubmit={handleEmployeeSubmit} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="login-phone">Phone number</Label>
+                <Input
+                  id="login-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full gap-2" disabled={busy}>
+                <Phone className="h-4 w-4" />
+                {busy ? "Signing in…" : "Sign in"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => openPanel("login")}
+              >
+                Back to sign in
+              </Button>
+            </form>
+          ) : null}
+
+          {shownPanel === "username" ? (
             <form onSubmit={handleChangeUsername} className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cu-pass">Current password</Label>
@@ -276,7 +382,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </form>
           ) : null}
 
-          {panel === "password" ? (
+          {shownPanel === "password" ? (
             <form onSubmit={handleChangePassword} className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cp-current">Current password</Label>
