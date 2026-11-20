@@ -39,7 +39,6 @@ class SupabaseKeysFileTest {
     assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(f.path().getParent())));
     assertEquals(URL, f.read().url());
     assertEquals(fakeJwt("anon"), f.read().anonKey());
-    assertEquals(1, f.active().size());
   }
 
   @Test
@@ -75,7 +74,37 @@ class SupabaseKeysFileTest {
   @Test
   void missingFileReadsNull() {
     assertNull(file().read());
-    assertEquals(0, file().active().size());
+  }
+
+  @Test
+  void serverConfigIsUsedUntilALoginSavesTheFile() throws Exception {
+    var f = new SupabaseKeysFile(dir.resolve("c.json"), URL, fakeJwt("anon"), new ObjectMapper());
+    assertEquals(URL, f.expectedUrl());
+    assertEquals(fakeJwt("anon"), f.read().anonKey());
+    f.save(URL, "sb_publishable_abcdefghijklmnopqrstuvwxyz");
+    assertEquals("sb_publishable_abcdefghijklmnopqrstuvwxyz", f.read().anonKey());
+  }
+
+  @Test
+  void savedFileForAnotherProjectIsIgnoredWhenPinned() throws Exception {
+    var open = new SupabaseKeysFile(dir.resolve("p.json"), "", new ObjectMapper());
+    open.save("https://other.supabase.co", fakeJwt("anon"));
+    var pinned = new SupabaseKeysFile(dir.resolve("p.json"), URL, new ObjectMapper());
+    assertNull(pinned.read());
+  }
+
+  @Test
+  void serviceRoleInServerConfigStopsStartup() {
+    assertThrows(IllegalStateException.class,
+        () -> new SupabaseKeysFile(dir.resolve("s.json"), URL, fakeJwt("service_role"), new ObjectMapper()));
+    assertThrows(IllegalStateException.class,
+        () -> new SupabaseKeysFile(dir.resolve("s.json"), URL, "sb_secret_abcdefghijklmnopqrstuvwxyz", new ObjectMapper()));
+  }
+
+  @Test
+  void publishableKeyIsNotSentAsBearer() {
+    assertEquals(java.util.Map.of("apikey", "sb_publishable_abc"), SupabaseKeysFile.authHeaders("sb_publishable_abc"));
+    assertEquals("Bearer " + fakeJwt("anon"), SupabaseKeysFile.authHeaders(fakeJwt("anon")).get("Authorization"));
   }
 
   @Test

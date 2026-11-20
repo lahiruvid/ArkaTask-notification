@@ -36,14 +36,23 @@ public class SupabaseJwtVerifier {
 
   private volatile SupabaseJwks jwks;
   private volatile String issuer;
+  private final boolean pinned;
   private final String audience;
   private final Set<String> allowedAlgs;
   private final long clockSkewSeconds;
 
   public SupabaseJwtVerifier(
       SupabaseJwks jwks, String issuer, String audience, Set<String> allowedAlgs, long clockSkewSeconds) {
+    this(jwks, issuer, audience, allowedAlgs, clockSkewSeconds, false);
+  }
+
+  /** @param pinned true when SUPABASE_URL fixed the project: no other project can ever be adopted. */
+  public SupabaseJwtVerifier(
+      SupabaseJwks jwks, String issuer, String audience, Set<String> allowedAlgs, long clockSkewSeconds,
+      boolean pinned) {
     this.jwks = jwks;
     this.issuer = issuer;
+    this.pinned = pinned;
     this.audience = audience;
     this.allowedAlgs = Set.copyOf(allowedAlgs);
     this.clockSkewSeconds = clockSkewSeconds;
@@ -59,25 +68,38 @@ public class SupabaseJwtVerifier {
     return current != null && current.isLoaded();
   }
 
-  /** Loads JWKS for a project URL already stored by login-service. */
+  /**
+   * Loads JWKS from https://&lt;project&gt;.supabase.co/auth/v1/.well-known/jwks.json. The URL must be
+   * that host; a client-supplied JWKS URL is never used. When the server config pinned a project,
+   * any other project is refused. The anon key is not involved.
+   */
   public synchronized void adoptProject(String projectUrl) {
-    String base = SupabaseKeysFile.normalizeUrl(projectUrl);
-    if (!base.regionMatches(true, 0, "https://", 0, 8) || !base.toLowerCase().endsWith(".supabase.co")) {
-      throw new AuthException(400, "Supabase project URL must be https://<project-ref>.supabase.co");
+    String base;
+    try {
+      base = SupabaseKeysFile.requireProjectUrl(projectUrl);
+    } catch (SupabaseKeysFile.RejectedKeys ex) {
+      throw new AuthException(400, ex.getMessage());
     }
     String iss = base + "/auth/v1";
     if (iss.equals(issuer) && jwks != null) {
       return;
     }
+    if (pinned) {
+      throw new AuthException(400, "Supabase project URL does not match this server.");
+    }
+    SupabaseJwks previous = jwks;
     SupabaseJwks cache = new SupabaseJwks(
         URI.create(iss + "/.well-known/jwks.json"),
         SupabaseJwks.httpsFetcher(),
         new ObjectMapper(),
         Duration.ofSeconds(60),
         Clock.systemUTC());
-    cache.loadAtStartup(2, Duration.ofSeconds(1), Duration.ofSeconds(2));
+    cache.loadAtStartup(2, Duration.ofSeconds(1), Duration.ofSeconds(30));
     this.jwks = cache;
     this.issuer = iss;
+    if (previous != null) {
+      previous.close();
+    }
   }
 
   /** @param authorization the raw Authorization header value */

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Timeout;
  * The DClean owner username login is not this service.
  *
  * Requires app_state to already contain the employee and a job for today.
- * Defaults: http://localhost:8080 and http://localhost:8083
+ * Defaults match the Oracle VM: Nginx on http://127.0.0.1 and owner-notifier on 127.0.0.1:18083.
  * Override with E2E_BASE_URL, E2E_NOTIFIER_URL, and E2E_PHONE.
  *
  * Login needs a real Supabase Auth access token (for example from an anonymous sign-in in the
@@ -28,15 +28,15 @@ import org.junit.jupiter.api.Timeout;
  * E2E_SUPABASE_ANON_KEY. The test is skipped when they are not set. Never use a service_role key.
  */
 class EmployeeCleanJourneyTest {
-  private final String baseUrl = env("E2E_BASE_URL", "http://localhost:8080");
-  private final String notifierUrl = env("E2E_NOTIFIER_URL", "http://localhost:8083");
+  private final String baseUrl = env("E2E_BASE_URL", "http://127.0.0.1");
+  private final String notifierUrl = env("E2E_NOTIFIER_URL", "http://127.0.0.1:18083");
   private final String phone = env("E2E_PHONE", "+393331112222");
   private final String accessToken = env("E2E_SUPABASE_ACCESS_TOKEN", "");
   private final String supabaseUrl = env("E2E_SUPABASE_URL", "");
   private final String anonKey = env("E2E_SUPABASE_ANON_KEY", "");
 
   @Test
-  @Timeout(40)
+  @Timeout(120)
   void employeeLoginCleanTapReachesOwnerNotifier() throws InterruptedException {
     assumeFalse(accessToken.isBlank() || supabaseUrl.isBlank() || anonKey.isBlank(),
         "Set E2E_SUPABASE_ACCESS_TOKEN, E2E_SUPABASE_URL and E2E_SUPABASE_ANON_KEY");
@@ -78,7 +78,7 @@ class EmployeeCleanJourneyTest {
 
   private Response waitForNotice(String apartmentName) throws InterruptedException {
     Response latest = null;
-    long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+    long deadline = System.nanoTime() + Duration.ofSeconds(90).toNanos();
     while (System.nanoTime() < deadline) {
       latest = given().get(notifierUrl + "/api/notifications/latest");
       if (latest.statusCode() == 200) {

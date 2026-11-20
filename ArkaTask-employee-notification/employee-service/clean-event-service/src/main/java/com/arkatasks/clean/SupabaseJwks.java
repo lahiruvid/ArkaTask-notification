@@ -52,7 +52,7 @@ public class SupabaseJwks {
   private volatile Map<String, VerificationKey> keys = Map.of();
   private volatile Instant lastFetchAttempt = Instant.EPOCH;
   private volatile Instant lastSuccess = Instant.EPOCH;
-  private ScheduledExecutorService retrier;
+  private volatile ScheduledExecutorService retrier;
 
   public SupabaseJwks(URI jwksUri, Fetcher fetcher, ObjectMapper json, Duration minRefresh, Clock clock) {
     this.jwksUri = jwksUri;
@@ -116,6 +116,14 @@ public class SupabaseJwks {
         log.warn("Supabase JWKS background refresh failed: {}", ex.getMessage());
       }
     }, backgroundRetry.toMillis(), backgroundRetry.toMillis(), TimeUnit.MILLISECONDS);
+  }
+
+  /** Stops the background refresh. Used when the server switches to another project's JWKS. */
+  public void close() {
+    ScheduledExecutorService current = retrier;
+    if (current != null) {
+      current.shutdownNow();
+    }
   }
 
   public boolean isLoaded() {
